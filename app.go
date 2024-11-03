@@ -26,7 +26,7 @@ func (a *App) startup(ctx context.Context) {
 
 	// Initialize tritium client
 	client, err := tritium.NewClient(&tritium.ClientOptions{
-		Address: "localhost:40217", // Make sure this matches your server port
+		Address: "localhost:41739", // Make sure this matches your server port
 		Timeout: 5 * time.Second,
 	})
 	if err != nil {
