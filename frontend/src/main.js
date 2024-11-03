@@ -22,6 +22,7 @@ document.querySelector('#app').innerHTML = `
     <div class="main-container">
         <div class="sidebar">
             <img id="logo" class="logo">
+            <h1 class="result-view">TRITIUM</h2>
         </div>
         <div class="main-content">
             <div class="content-area" id="content-area">
