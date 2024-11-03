@@ -9,3 +9,7 @@ export function GetValue(arg1) {
 export function SetValue(arg1, arg2) {
   return window['go']['main']['App']['SetValue'](arg1, arg2);
 }
+
+export function UpdateConnection(arg1, arg2) {
+  return window['go']['main']['App']['UpdateConnection'](arg1, arg2);
+}

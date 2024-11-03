@@ -61,3 +61,19 @@ func (a *App) GetValue(key string) string {
 	}
 	return string(value)
 }
+
+// UpdateConnection updates the tritium client connection
+func (a *App) UpdateConnection(address string, port string) string {
+	// Create the new client
+	client, err := tritium.NewClient(&tritium.ClientOptions{
+		Address: fmt.Sprintf("%s:%s", address, port),
+		Timeout: 5 * time.Second,
+	})
+	if err != nil {
+		return fmt.Sprintf("Failed to connect: %v", err)
+	}
+
+	// Update the client
+	a.client = client
+	return "Connected successfully"
+}

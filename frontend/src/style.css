@@ -14,15 +14,52 @@ body {
 #app {
     height: 100vh;
     display: flex;
+    flex-direction: column;
+}
+
+.topbar {
+    background-color: #161b22;
+    border-bottom: 1px solid #30363d;
+    display: flex;
+    justify-content: center; /* Center the tabs container */
+    padding: 0 20px;
+}
+
+.tabs {
+    display: flex;
+    gap: 10px;
+    height: 50px;
+    align-items: center;
+}
+
+.tab {
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    color: #8b949e;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    height: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.tab.active {
+    color: #2ea043;
+    border-bottom-color: #2ea043;
+}
+
+.main-container {
+    flex: 1;
+    display: flex;
 }
 
 .sidebar {
     width: 250px;
-    height: 100vh;
     background-color: #161b22;
     border-right: 1px solid #30363d;
-    display: flex;
-    flex-direction: column;
+    padding: 20px;
+    box-sizing: border-box;
 }
 
 .main-content {
@@ -49,26 +86,6 @@ body {
     gap: 10px;
 }
 
-.tabs {
-    display: flex;
-    padding: 20px 20px 0;
-    gap: 10px;
-}
-
-.tab {
-    padding: 8px 16px;
-    border: none;
-    background: none;
-    color: #8b949e;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-}
-
-.tab.active {
-    color: #2ea043;
-    border-bottom-color: #2ea043;
-}
-
 .history-table {
     width: 100%;
     border-collapse: collapse;
@@ -92,4 +109,44 @@ body {
     justify-content: center;
     align-items: center;
     flex: 1;
+}
+
+.connection-form {
+    padding: 20px;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #8b949e;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+    padding: 12px;
+    border-radius: 6px;
+    background-color: #1c2128;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.status-indicator.connected {
+    background-color: #238636;
+}
+
+.status-indicator.disconnected {
+    background-color: #f85149;
 }
