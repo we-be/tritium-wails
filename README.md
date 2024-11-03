@@ -14,7 +14,7 @@ A modern, cross-platform GUI client for interacting with Tritium key-value store
 
 ## Installation
 
-Download the latest release for your platform from the [releases page](https://github.com/your-username/tritium-wails/releases).
+Download the latest release for your platform from the [releases page](https://github.com/we-be/tritium-wails/releases).
 
 ## Development
 
@@ -27,7 +27,7 @@ Download the latest release for your platform from the [releases page](https://g
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/tritium-wails.git
+git clone https://github.com/we-be/tritium-wails.git
 cd tritium-wails
 
 # Install dependencies
