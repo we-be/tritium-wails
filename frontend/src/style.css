@@ -23,14 +23,31 @@ body {
     border-right: 1px solid #30363d;
     padding: 20px;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
 }
 
 .main-content {
     flex: 1;
-    padding: 20px;
-    text-align: center;
     display: flex;
     flex-direction: column;
+}
+
+.content-area {
+    flex: 1;
+    padding: 20px;
+    display: flex;
     justify-content: center;
     align-items: center;
+}
+
+.bottom-pane {
+    height: 80px;
+    background-color: #161b22;
+    border-top: 1px solid #30363d;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
 }

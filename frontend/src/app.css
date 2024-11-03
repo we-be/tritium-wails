@@ -2,20 +2,37 @@
     width: 120px;
     height: auto;
     display: block;
+    margin: 0 auto 20px;
+}
+
+.add-button {
+    background-color: #238636;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    height: 36px;
+    width: 36px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin: 0 auto;
 }
 
+.add-button:hover {
+    background-color: #2ea043;
+}
+
 .result {
-    margin: 1.5rem auto;
     color: #8b949e;
+    margin-left: 10px;
 }
 
 .input-box {
     display: flex;
     gap: 10px;
-    justify-content: center;
     align-items: center;
-    flex-wrap: wrap;
 }
 
 .input-box .input {
@@ -43,4 +60,16 @@
 
 .input-box .btn:hover {
     background-color: #2ea043;
+}
+
+.input {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #8b949e;
+    height: 30px;
+    line-height: 30px;
+    outline: none;
+    padding: 0 10px;
+    width: 200px;
 }
