@@ -1,4 +1,3 @@
-/* app.css */
 #logo {
     width: 120px;
     height: auto;
@@ -9,6 +8,14 @@
 .result {
     margin: 1.5rem auto;
     color: #8b949e;
+}
+
+.input-box {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 .input-box .input {
@@ -30,8 +37,8 @@
     color: white;
     cursor: pointer;
     height: 30px;
-    margin-left: 20px;
     padding: 0 16px;
+    min-width: 60px;
 }
 
 .input-box .btn:hover {
