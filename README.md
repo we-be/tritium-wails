@@ -2,7 +2,7 @@
 
 A modern, cross-platform GUI client for interacting with Tritium key-value stores.
 
-![Screenshot of Tritium GUI](screenshot.png)
+![Screenshot from 2024-11-03 11-35-48](https://github.com/user-attachments/assets/3d469387-a8da-48ba-a785-246fb68a6ed9)
 
 ## Features
 
