@@ -5,6 +5,7 @@
     --aerogel-accent: #2ea043;
     --aerogel-text: #c9d1d9;
     --aerogel-border: #30363d;
+    --aerogel-input-text: #8b949e;
 }
 
 html {
@@ -46,6 +47,10 @@ body {
     flex: 1;
     padding: 20px;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 /* app.css */
@@ -53,7 +58,7 @@ body {
     display: block;
     width: 120px;
     height: auto;
-    margin: 0 auto 30px;
+    margin: 0 auto;
     padding: 0;
 }
 
@@ -91,8 +96,9 @@ body {
     line-height: 30px;
     padding: 0 10px;
     background-color: var(--aerogel-sidebar);
-    color: var(--aerogel-text);
+    color: var(--aerogel-input-text);
     transition: all 0.2s ease;
+    width: 200px;
 }
 
 .input-box .input:hover,

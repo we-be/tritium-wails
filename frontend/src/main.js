@@ -6,19 +6,12 @@ import {GetValue} from '../wailsjs/go/main/App';
 document.querySelector('#app').innerHTML = `
     <div class="sidebar">
         <img id="logo" class="logo">
-        <nav>
-            <ul style="list-style: none; padding: 0; margin: 0;">
-                <li style="margin-bottom: 10px; color: var(--aerogel-text);">Dashboard</li>
-                <li style="margin-bottom: 10px; color: var(--aerogel-text);">Settings</li>
-                <li style="margin-bottom: 10px; color: var(--aerogel-text);">About</li>
-            </ul>
-        </nav>
     </div>
     <div class="main-content">
-        <div class="result" id="result">Please enter your name below 👇</div>
+        <div class="result" id="result">Enter a key to get a value</div>
         <div class="input-box" id="input">
-            <input class="input" id="name" type="text" autocomplete="off" />
-            <button class="btn" onclick="greet()">Greet</button>
+            <input class="input" id="name" type="text" autocomplete="off" placeholder="Enter key..." />
+            <button class="btn" onclick="greet()">Get</button>
         </div>
     </div>
 `;
