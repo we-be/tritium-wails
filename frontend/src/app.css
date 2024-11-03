@@ -2,31 +2,11 @@
     width: 120px;
     height: auto;
     display: block;
-    margin: 0 auto 20px;
-}
-
-.add-button {
-    background-color: #238636;
-    border: none;
-    border-radius: 6px;
-    color: white;
-    cursor: pointer;
-    height: 36px;
-    width: 36px;
-    font-size: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto;
-}
-
-.add-button:hover {
-    background-color: #2ea043;
+    margin: 20px auto;
 }
 
 .result {
     color: #8b949e;
-    margin-left: 10px;
 }
 
 .input-box {
@@ -35,30 +15,21 @@
     align-items: center;
 }
 
-.input-box .input {
-    background-color: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-    color: #8b949e;
-    height: 30px;
-    line-height: 30px;
-    outline: none;
-    padding: 0 10px;
-    width: 200px;
-}
-
-.input-box .btn {
+.add-button {
     background-color: #238636;
     border: none;
     border-radius: 6px;
     color: white;
     cursor: pointer;
     height: 30px;
-    padding: 0 16px;
-    min-width: 60px;
+    width: 30px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.input-box .btn:hover {
+.add-button:hover {
     background-color: #2ea043;
 }
 
@@ -72,4 +43,19 @@
     outline: none;
     padding: 0 10px;
     width: 200px;
+}
+
+.btn {
+    background-color: #238636;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    height: 30px;
+    padding: 0 16px;
+    min-width: 60px;
+}
+
+.btn:hover {
+    background-color: #2ea043;
 }

@@ -3,16 +3,26 @@ import './app.css';
 import logo from './assets/images/logo-universal.png';
 import {GetValue, SetValue} from '../wailsjs/go/main/App';
 
+// Command history storage
+let commandHistory = [];
+
 document.querySelector('#app').innerHTML = `
     <div class="sidebar">
         <img id="logo" class="logo">
-        <button class="add-button" onclick="showSetDialog()">+</button>
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('result')">Result</button>
+            <button class="tab" onclick="switchTab('history')">History</button>
+        </div>
+        <div id="sidebar-content"></div>
     </div>
     <div class="main-content">
-        <div class="content-area">
-            <div id="result" class="result">Select a key to get its value</div>
+        <div class="content-area" id="content-area">
+            <div class="result-view">
+                <div id="result" class="result">Select a key to get its value</div>
+            </div>
         </div>
         <div class="bottom-pane">
+            <button class="add-button" onclick="showSetDialog()">+</button>
             <input class="input" id="keyInput" type="text" autocomplete="off" placeholder="Enter key..." />
             <button class="btn" onclick="getValue()">Get</button>
         </div>
@@ -25,6 +35,38 @@ let resultElement = document.getElementById("result");
 
 keyElement.focus();
 
+// Setup tab switching
+window.switchTab = function(tab) {
+    // Update tab styling
+    document.querySelectorAll('.tab').forEach(t => {
+        t.classList.remove('active');
+    });
+    event.target.classList.add('active');
+
+    // Update content
+    const contentArea = document.getElementById('content-area');
+    if (tab === 'history') {
+        contentArea.innerHTML = `
+            <table class="history-table">
+                <tbody>
+                    ${commandHistory.map(cmd => `
+                        <tr>
+                            <td>${cmd}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } else {
+        contentArea.innerHTML = `
+            <div class="result-view">
+                <div id="result" class="result">${resultElement.innerText}</div>
+            </div>
+        `;
+        resultElement = document.getElementById("result");
+    }
+};
+
 // Setup the getValue function
 window.getValue = function () {
     let key = keyElement.value;
@@ -34,14 +76,19 @@ window.getValue = function () {
         GetValue(key)
             .then((result) => {
                 resultElement.innerText = result;
+                commandHistory.unshift(`GET ${key} → ${result}`);
+                keyElement.value = "";
+                keyElement.focus();
             })
             .catch((err) => {
                 console.error(err);
                 resultElement.innerText = "Error: " + err;
+                commandHistory.unshift(`GET ${key} → Error: ${err}`);
             });
     } catch (err) {
         console.error(err);
         resultElement.innerText = "Error: " + err;
+        commandHistory.unshift(`GET ${key} → Error: ${err}`);
     }
 };
 
@@ -105,11 +152,13 @@ window.showSetDialog = function() {
         SetValue(key, value)
             .then((result) => {
                 resultElement.innerText = result;
+                commandHistory.unshift(`SET ${key} ${value} → ${result}`);
                 closeModal();
             })
             .catch((err) => {
                 console.error(err);
                 resultElement.innerText = "Error: " + err;
+                commandHistory.unshift(`SET ${key} ${value} → Error: ${err}`);
             });
     };
 };
