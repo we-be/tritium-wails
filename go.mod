@@ -1,10 +1,11 @@
 module tritium-wails
 
-go 1.21
+go 1.22.2
 
-toolchain go1.22.2
-
-require github.com/wailsapp/wails/v2 v2.9.2
+require (
+	github.com/wailsapp/wails/v2 v2.9.2
+	github.com/we-be/tritium v0.0.0-20241103030527-d36ac73782f3
+)
 
 require (
 	github.com/bep/debounce v1.2.1 // indirect
