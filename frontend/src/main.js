@@ -1,243 +1,199 @@
 import './style.css';
-import './app.css';
 import logo from './assets/images/logo-universal.png';
-import {GetValue, SetValue, UpdateConnection} from '../wailsjs/go/main/App';
+import {Connect, Delete, Disconnect, Get, LoadSettings, Nodes, Set, Status} from '../wailsjs/go/main/App';
 
-// Command history storage
-let commandHistory = [];
-let currentConnection = {
-    address: 'localhost',
-    port: '41739',
-    status: 'disconnected'
+// Every piece of data reaches the DOM through textContent, never innerHTML: values
+// come from a store anyone with the password can write to.
+const el = (tag, attrs = {}, ...children) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) n.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of children) n.append(c);
+  return n;
 };
 
-document.querySelector('#app').innerHTML = `
-    <div class="topbar">
-        <div class="tabs">
-            <button class="tab active" onclick="switchTab(event, 'result')">Result</button>
-            <button class="tab" onclick="switchTab(event, 'history')">History</button>
-            <button class="tab" onclick="switchTab(event, 'connections')">Connections</button>
-        </div>
-    </div>
-    <div class="main-container">
-        <div class="sidebar">
-            <img id="logo" class="logo">
-            <h1 class="result-view">TRITIUM</h2>
-        </div>
-        <div class="main-content">
-            <div class="content-area" id="content-area">
-                <div class="result-view">
-                    <div id="result" class="result">Select a key to get its value</div>
-                </div>
-            </div>
-            <div class="bottom-pane">
-                <button class="add-button" onclick="showSetDialog()">+</button>
-                <input class="input" id="keyInput" type="text" autocomplete="off" placeholder="Enter key..." />
-                <button class="btn" onclick="getValue()">Get</button>
-            </div>
-        </div>
-    </div>
-`;
+const history = [];
+let status = {connected: false};
 
-document.getElementById('logo').src = logo;
-let keyElement = document.getElementById("keyInput");
-let resultElement = document.getElementById("result");
+// ── layout ────────────────────────────────────────────────────────────────
+const statusPill = el('span', {class: 'pill'}, 'disconnected');
+const tabs = el('nav', {class: 'tabs'});
+const panel = el('main', {class: 'panel'});
+const sidebar = el('aside', {class: 'sidebar'});
+document.querySelector('#app').append(
+  el('header', {class: 'topbar'}, el('img', {class: 'logo', src: logo, alt: ''}), el('h1', {}, 'TRITIUM'), tabs, statusPill),
+  el('div', {class: 'body'}, sidebar, panel),
+);
 
-keyElement.focus();
+function note(text, kind = '') {
+  history.unshift({at: new Date(), text, kind});
+  if (history.length > 200) history.pop();
+  if (current === 'history') views.history();
+}
 
-// Setup tab switching
-window.switchTab = function(event, tab) {
-    // Update tab styling
-    document.querySelectorAll('.tab').forEach(t => {
-        t.classList.remove('active');
-    });
-    if (event && event.target) {
-        event.target.classList.add('active');
+function fail(err) {
+  const text = String(err && err.message ? err.message : err);
+  note(text, 'err');
+  return text;
+}
+
+function setStatus(s) {
+  status = s || {connected: false};
+  statusPill.textContent = status.connected
+    ? `${status.address}${status.tls ? ' · TLS' : ''}${status.encrypted ? ' · sealed' : ''}`
+    : 'disconnected';
+  statusPill.className = 'pill ' + (status.connected ? 'on' : 'off');
+}
+
+// ── connect panel (sidebar) ───────────────────────────────────────────────
+const field = (label, input) => el('label', {class: 'field'}, el('span', {}, label), input);
+const inAddr = el('input', {placeholder: '127.0.0.1:8080', autocomplete: 'off'});
+const inPass = el('input', {type: 'password', placeholder: 'AUTH password', autocomplete: 'off'});
+const inTLS = el('input', {type: 'checkbox'});
+const inCA = el('input', {placeholder: '/path/to/ca.crt (empty = system roots)', autocomplete: 'off'});
+const inKey = el('input', {type: 'password', placeholder: '32-byte key, hex or base64', autocomplete: 'off'});
+const inEnv = el('input', {placeholder: "a node's .env: fills address, password, CA", autocomplete: 'off'});
+const btnConnect = el('button', {class: 'primary', onclick: connect}, 'Connect');
+const btnDisconnect = el('button', {onclick: async () => { setStatus(await Disconnect()); note('disconnected'); }}, 'Disconnect');
+
+sidebar.append(
+  el('h2', {}, 'Connection'),
+  field('Node', inAddr),
+  field('Password', inPass),
+  el('label', {class: 'field check'}, inTLS, el('span', {}, 'TLS')),
+  field('CA bundle', inCA),
+  field('Encryption key', inKey),
+  field('Env file', inEnv),
+  el('div', {class: 'row'}, btnConnect, btnDisconnect),
+  el('p', {class: 'hint'}, 'Password and key stay in memory; the rest is remembered. A sealed client reads only values it sealed.'),
+);
+
+async function connect() {
+  btnConnect.disabled = true;
+  try {
+    const s = await Connect({address: inAddr.value.trim(), password: inPass.value, tls: inTLS.checked,
+                             ca: inCA.value.trim(), key: inKey.value.trim(), envFile: inEnv.value.trim()});
+    setStatus(s);
+    note(`connected to ${s.address}`);
+    if (current === 'nodes') views.nodes();
+  } catch (e) {
+    setStatus(status);
+    resultBox.textContent = fail(e);
+  } finally {
+    btnConnect.disabled = false;
+  }
+}
+
+// ── keys view ─────────────────────────────────────────────────────────────
+const inGetKey = el('input', {placeholder: 'key', autocomplete: 'off'});
+const inSetKey = el('input', {placeholder: 'key', autocomplete: 'off'});
+const inSetVal = el('textarea', {placeholder: 'value', rows: 4});
+const inTTL = el('input', {type: 'number', min: 0, placeholder: 'TTL s (0 = default)', class: 'ttl'});
+const resultBox = el('pre', {class: 'result'}, 'Connect, then get a key.');
+
+async function get() {
+  const key = inGetKey.value.trim();
+  if (!key) return;
+  try {
+    const v = await Get(key);
+    resultBox.textContent = v;
+    note(`GET ${key} → ${v.length} bytes`);
+  } catch (e) { resultBox.textContent = fail(e); }
+}
+async function set() {
+  const key = inSetKey.value.trim();
+  if (!key) return;
+  const ttl = Number(inTTL.value) || 0;
+  try {
+    await Set(key, inSetVal.value, ttl);
+    resultBox.textContent = `OK  ${key}${ttl ? `  (expires in ${ttl}s)` : ''}`;
+    note(`SET ${key} (${inSetVal.value.length} bytes${ttl ? `, ttl ${ttl}s` : ''})`);
+  } catch (e) { resultBox.textContent = fail(e); }
+}
+async function del() {
+  const key = inGetKey.value.trim() || inSetKey.value.trim();
+  if (!key) return;
+  try {
+    const was = await Delete(key);
+    resultBox.textContent = was ? `deleted ${key}` : `${key}: nothing to delete`;
+    note(`DEL ${key} → ${was ? 'deleted' : 'absent'}`);
+  } catch (e) { resultBox.textContent = fail(e); }
+}
+inGetKey.addEventListener('keydown', e => { if (e.key === 'Enter') get(); });
+
+const keysView = el('div', {class: 'keys'},
+  el('section', {},
+    el('h2', {}, 'Get'),
+    el('div', {class: 'row'}, inGetKey, el('button', {class: 'primary', onclick: get}, 'Get'), el('button', {class: 'danger', onclick: del}, 'Delete')),
+    resultBox),
+  el('section', {},
+    el('h2', {}, 'Set'),
+    el('div', {class: 'row'}, inSetKey, inTTL),
+    inSetVal,
+    el('div', {class: 'row'}, el('button', {class: 'primary', onclick: set}, 'Set'))),
+);
+
+// ── nodes view ────────────────────────────────────────────────────────────
+const nodesTable = el('table', {class: 'nodes'});
+const nodesNote = el('p', {class: 'hint'});
+const nodesView = el('div', {}, el('h2', {}, 'Cluster'), nodesTable, nodesNote);
+let nodesTimer = null;
+
+const ago = iso => {
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
+};
+const kb = n => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : `${(n / 1048576).toFixed(1)} MiB`;
+
+async function renderNodes() {
+  nodesTable.replaceChildren();
+  try {
+    const nodes = await Nodes();
+    nodesTable.append(el('tr', {}, ...['', 'address', 'store', 'state', 'seen', 'conns', 'moved'].map(h => el('th', {}, h))));
+    for (const n of nodes) {
+      const dot = el('span', {class: 'dot ' + n.state}, '●');
+      nodesTable.append(el('tr', {}, el('td', {}, dot), el('td', {}, n.addr + (n.seed ? ' (seed)' : '')), el('td', {}, n.store),
+                           el('td', {}, n.state), el('td', {}, ago(n.lastSeen)), el('td', {}, String(n.conns)), el('td', {}, kb(n.bytes))));
     }
+    nodesNote.textContent = `${nodes.length} node(s) as ${status.address} sees them · refreshes every 5s`;
+  } catch (e) { nodesNote.textContent = fail(e); }
+}
 
-    // Update content
-    const contentArea = document.getElementById('content-area');
-    
-    switch(tab) {
-        case 'history':
-            contentArea.innerHTML = `
-                <table class="history-table">
-                    <tbody>
-                        ${commandHistory.map(cmd => `
-                            <tr>
-                                <td>${cmd}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
-            break;
-            
-        case 'connections':
-            contentArea.innerHTML = `
-                <div class="connection-form">
-                    <div class="connection-status">
-                        <div class="status-indicator ${currentConnection.status}"></div>
-                        <span style="color: #8b949e">
-                            ${currentConnection.status === 'connected' ? 'Connected' : 'Disconnected'}
-                        </span>
-                    </div>
-                    <div class="form-group">
-                        <label>Address</label>
-                        <input 
-                            class="input" 
-                            id="addressInput" 
-                            type="text" 
-                            value="${currentConnection.address}"
-                            style="width: 100%; box-sizing: border-box;"
-                        >
-                    </div>
-                    <div class="form-group">
-                        <label>Port</label>
-                        <input 
-                            class="input" 
-                            id="portInput" 
-                            type="text" 
-                            value="${currentConnection.port}"
-                            style="width: 100%; box-sizing: border-box;"
-                        >
-                    </div>
-                    <button class="btn" onclick="updateConnection()" style="width: 100%">
-                        Connect
-                    </button>
-                </div>
-            `;
-            break;
-            
-        default: // Result tab
-            contentArea.innerHTML = `
-                <div class="result-view">
-                    <div id="result" class="result">${resultElement.innerText}</div>
-                </div>
-            `;
-            resultElement = document.getElementById("result");
-    }
+// ── history view ──────────────────────────────────────────────────────────
+const historyList = el('ul', {class: 'history'});
+const historyView = el('div', {}, el('h2', {}, 'History'), historyList);
+
+// ── tabs ──────────────────────────────────────────────────────────────────
+let current = 'keys';
+const views = {
+  keys: () => panel.replaceChildren(keysView),
+  nodes: () => { panel.replaceChildren(nodesView); renderNodes(); },
+  history: () => {
+    historyList.replaceChildren(...history.map(h => el('li', {class: h.kind},
+      el('time', {}, h.at.toLocaleTimeString()), el('span', {}, h.text))));
+    panel.replaceChildren(historyView);
+  },
 };
+for (const name of Object.keys(views)) {
+  tabs.append(el('button', {class: 'tab' + (name === current ? ' active' : ''), onclick: e => {
+    current = name;
+    for (const t of tabs.children) t.classList.toggle('active', t === e.currentTarget);
+    clearInterval(nodesTimer); nodesTimer = null;
+    views[name]();
+    if (name === 'nodes') nodesTimer = setInterval(renderNodes, 5000);
+  }}, name[0].toUpperCase() + name.slice(1)));
+}
+views.keys();
 
-// Update connection settings
-window.updateConnection = function() {
-    const address = document.getElementById('addressInput').value;
-    const port = document.getElementById('portInput').value;
-    
-    if (!address || !port) {
-        alert('Please provide both address and port');
-        return;
-    }
-
-    UpdateConnection(address, port)
-        .then((result) => {
-            currentConnection = {
-                address,
-                port,
-                status: 'connected'
-            };
-            commandHistory.unshift(`CONNECT ${address}:${port} → ${result}`);
-            switchTab(null, 'connections'); // Refresh the connection view
-        })
-        .catch((err) => {
-            currentConnection.status = 'disconnected';
-            commandHistory.unshift(`CONNECT ${address}:${port} → Error: ${err}`);
-            switchTab(null, 'connections');
-        });
-};
-
-// Setup the getValue function
-window.getValue = function () {
-    let key = keyElement.value;
-    if (key === "") return;
-    
-    try {
-        GetValue(key)
-            .then((result) => {
-                resultElement.innerText = result;
-                commandHistory.unshift(`GET ${key} → ${result}`);
-                keyElement.value = "";
-                keyElement.focus();
-            })
-            .catch((err) => {
-                console.error(err);
-                resultElement.innerText = "Error: " + err;
-                commandHistory.unshift(`GET ${key} → Error: ${err}`);
-            });
-    } catch (err) {
-        console.error(err);
-        resultElement.innerText = "Error: " + err;
-        commandHistory.unshift(`GET ${key} → Error: ${err}`);
-    }
-};
-
-// Function to show the set dialog
-window.showSetDialog = function() {
-    // Create modal overlay
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.7);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-    `;
-
-    // Create modal content
-    const content = document.createElement('div');
-    content.style.cssText = `
-        background: #161b22;
-        padding: 20px;
-        border-radius: 8px;
-        border: 1px solid #30363d;
-        width: 300px;
-    `;
-
-    content.innerHTML = `
-        <h3 style="margin-top: 0; color: #c9d1d9; margin-bottom: 15px;">Add New Key-Value Pair</h3>
-        <input class="input" id="modalKeyInput" type="text" placeholder="Enter key..." style="width: 100%; margin-bottom: 10px; box-sizing: border-box;">
-        <input class="input" id="modalValueInput" type="text" placeholder="Enter value..." style="width: 100%; margin-bottom: 15px; box-sizing: border-box;">
-        <div style="display: flex; justify-content: flex-end; gap: 10px;">
-            <button class="btn" onclick="closeModal()">Cancel</button>
-            <button class="btn" onclick="submitValue()">Save</button>
-        </div>
-    `;
-
-    modal.appendChild(content);
-    document.body.appendChild(modal);
-
-    // Focus the key input
-    document.getElementById('modalKeyInput').focus();
-
-    // Setup close modal function
-    window.closeModal = function() {
-        document.body.removeChild(modal);
-    };
-
-    // Setup submit function
-    window.submitValue = function() {
-        const key = document.getElementById('modalKeyInput').value;
-        const value = document.getElementById('modalValueInput').value;
-
-        if (key === "" || value === "") {
-            return;
-        }
-
-        SetValue(key, value)
-            .then((result) => {
-                resultElement.innerText = result;
-                commandHistory.unshift(`SET ${key} ${value} → ${result}`);
-                closeModal();
-            })
-            .catch((err) => {
-                console.error(err);
-                resultElement.innerText = "Error: " + err;
-                commandHistory.unshift(`SET ${key} ${value} → Error: ${err}`);
-            });
-    };
-};
+// ── boot ──────────────────────────────────────────────────────────────────
+LoadSettings().then(s => {
+  inAddr.value = s.address || '';
+  inTLS.checked = !!s.tls;
+  inCA.value = s.ca || '';
+  inEnv.value = s.envFile || '';
+}).catch(() => {});
+Status().then(setStatus).catch(() => {});
+inAddr.focus();
