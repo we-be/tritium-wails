@@ -16,9 +16,7 @@ export namespace main {
 	export class Node {
 	    id: string;
 	    addr: string;
-	    store: string;
 	    state: string;
-	    seed: boolean;
 	    version: string;
 	    seeds: string;
 	    replicas: string;

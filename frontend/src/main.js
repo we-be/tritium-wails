@@ -1,9 +1,12 @@
 import './style.css';
-import logo from './assets/images/logo-universal.png';
-import {Connect, Delete, Disconnect, Get, LoadSettings, Nodes, Set, Status} from '../wailsjs/go/main/App';
+import * as app from '../wailsjs/go/main/App';
 
-// Every piece of data reaches the DOM through textContent, never innerHTML: values
-// come from a store anyone with the password can write to.
+// The Go side, or, when the UI runs in a plain browser (`npm run dev`) for
+// layout work, a stand-in with sample data that the app build never loads.
+const {Connect, Delete, Disconnect, Get, LoadSettings, Nodes, Set, Status} = window.go ? app : (await import('./mock.js')).default;
+
+// Everything reaches the DOM through textContent, never innerHTML: values come
+// from a store anyone with the password can write to.
 const el = (tag, attrs = {}, ...children) => {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -11,190 +14,230 @@ const el = (tag, attrs = {}, ...children) => {
     else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
     else if (v !== false && v != null) n.setAttribute(k, v === true ? '' : v);
   }
-  for (const c of children) n.append(c);
+  n.append(...children);
+  return n;
+};
+const svg = (tag, attrs = {}, ...children) => {
+  const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  n.append(...children);
   return n;
 };
 
-const history = [];
-let status = {connected: false};
+// The mark is a tritium nucleus: one proton, two neutrons.
+const mark = () => svg('svg', {viewBox: '0 0 24 24', class: 'mark', 'aria-hidden': 'true'},
+  svg('circle', {cx: 12, cy: 8.2, r: 4.3, class: 'proton'}),
+  svg('circle', {cx: 7.6, cy: 15.6, r: 4.3, class: 'neutron'}),
+  svg('circle', {cx: 16.4, cy: 15.6, r: 4.3, class: 'neutron'}));
 
-// ── layout ────────────────────────────────────────────────────────────────
-const statusPill = el('span', {class: 'pill'}, 'disconnected');
-const tabs = el('nav', {class: 'tabs'});
-const panel = el('main', {class: 'panel'});
-const sidebar = el('aside', {class: 'sidebar'});
-document.querySelector('#app').append(
-  el('header', {class: 'topbar'}, el('img', {class: 'logo', src: logo, alt: ''}), el('h1', {}, 'TRITIUM'), tabs, statusPill),
-  el('div', {class: 'body'}, sidebar, panel),
-);
-
-function note(text, kind = '') {
-  history.unshift({at: new Date(), text, kind});
-  if (history.length > 200) history.pop();
-  if (current === 'history') views.history();
-}
-
-function fail(err) {
-  const text = String(err && err.message ? err.message : err);
-  note(text, 'err');
-  return text;
-}
-
-function setStatus(s) {
-  status = s || {connected: false};
-  statusPill.textContent = status.connected
-    ? `${status.address}${status.tls ? ' · TLS' : ''}${status.encrypted ? ' · sealed' : ''}`
-    : 'disconnected';
-  statusPill.className = 'pill ' + (status.connected ? 'on' : 'off');
-}
-
-// ── connect panel (sidebar) ───────────────────────────────────────────────
-const field = (label, input) => el('label', {class: 'field'}, el('span', {}, label), input);
-const inAddr = el('input', {placeholder: '127.0.0.1:8080', autocomplete: 'off'});
-const inPass = el('input', {type: 'password', placeholder: 'AUTH password', autocomplete: 'off'});
-const inTLS = el('input', {type: 'checkbox'});
-const inCA = el('input', {placeholder: '/path/to/ca.crt (empty = system roots)', autocomplete: 'off'});
-const inKey = el('input', {type: 'password', placeholder: '32-byte key, hex or base64', autocomplete: 'off'});
-const inEnv = el('input', {placeholder: "a node's .env: fills address, password, CA", autocomplete: 'off'});
-const btnConnect = el('button', {class: 'primary', onclick: connect}, 'Connect');
-const btnDisconnect = el('button', {onclick: async () => { setStatus(await Disconnect()); note('disconnected'); }}, 'Disconnect');
-
-sidebar.append(
-  el('h2', {}, 'Connection'),
-  field('Node', inAddr),
-  field('Password', inPass),
-  el('label', {class: 'field check'}, inTLS, el('span', {}, 'TLS')),
-  field('CA bundle', inCA),
-  field('Encryption key', inKey),
-  field('Env file', inEnv),
-  el('div', {class: 'row'}, btnConnect, btnDisconnect),
-  el('p', {class: 'hint'}, 'Password and key stay in memory; the rest is remembered. A sealed client reads only values it sealed.'),
-);
-
-async function connect() {
-  btnConnect.disabled = true;
-  try {
-    const s = await Connect({address: inAddr.value.trim(), password: inPass.value, tls: inTLS.checked,
-                             ca: inCA.value.trim(), key: inKey.value.trim(), envFile: inEnv.value.trim()});
-    setStatus(s);
-    note(`connected to ${s.address}`);
-    if (current === 'nodes') views.nodes();
-  } catch (e) {
-    setStatus(status);
-    resultBox.textContent = fail(e);
-  } finally {
-    btnConnect.disabled = false;
-  }
-}
-
-// ── keys view ─────────────────────────────────────────────────────────────
-const inGetKey = el('input', {placeholder: 'key', autocomplete: 'off'});
-const inSetKey = el('input', {placeholder: 'key', autocomplete: 'off'});
-const inSetVal = el('textarea', {placeholder: 'value', rows: 4});
-const inTTL = el('input', {type: 'number', min: 0, placeholder: 'TTL s (0 = default)', class: 'ttl'});
-const resultBox = el('pre', {class: 'result'}, 'Connect, then get a key.');
-
-async function get() {
-  const key = inGetKey.value.trim();
-  if (!key) return;
-  try {
-    const v = await Get(key);
-    resultBox.textContent = v;
-    note(`GET ${key} → ${v.length} bytes`);
-  } catch (e) { resultBox.textContent = fail(e); }
-}
-async function set() {
-  const key = inSetKey.value.trim();
-  if (!key) return;
-  const ttl = Number(inTTL.value) || 0;
-  try {
-    await Set(key, inSetVal.value, ttl);
-    resultBox.textContent = `OK  ${key}${ttl ? `  (expires in ${ttl}s)` : ''}`;
-    note(`SET ${key} (${inSetVal.value.length} bytes${ttl ? `, ttl ${ttl}s` : ''})`);
-  } catch (e) { resultBox.textContent = fail(e); }
-}
-async function del() {
-  const key = inGetKey.value.trim() || inSetKey.value.trim();
-  if (!key) return;
-  try {
-    const was = await Delete(key);
-    resultBox.textContent = was ? `deleted ${key}` : `${key}: nothing to delete`;
-    note(`DEL ${key} → ${was ? 'deleted' : 'absent'}`);
-  } catch (e) { resultBox.textContent = fail(e); }
-}
-inGetKey.addEventListener('keydown', e => { if (e.key === 'Enter') get(); });
-
-const keysView = el('div', {class: 'keys'},
-  el('section', {},
-    el('h2', {}, 'Get'),
-    el('div', {class: 'row'}, inGetKey, el('button', {class: 'primary', onclick: get}, 'Get'), el('button', {class: 'danger', onclick: del}, 'Delete')),
-    resultBox),
-  el('section', {},
-    el('h2', {}, 'Set'),
-    el('div', {class: 'row'}, inSetKey, inTTL),
-    inSetVal,
-    el('div', {class: 'row'}, el('button', {class: 'primary', onclick: set}, 'Set'))),
-);
-
-// ── nodes view ────────────────────────────────────────────────────────────
-const nodesTable = el('table', {class: 'nodes'});
-const nodesNote = el('p', {class: 'hint'});
-const nodesView = el('div', {}, el('h2', {}, 'Cluster'), nodesTable, nodesNote);
-let nodesTimer = null;
-
+const size = n => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : `${(n / 1048576).toFixed(1)} MiB`;
+const bytes = s => size(new TextEncoder().encode(s).length);
 const ago = iso => {
   const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
   return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
 };
-const kb = n => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : `${(n / 1048576).toFixed(1)} MiB`;
+const clock = d => d.toLocaleTimeString([], {hour12: false});
 
-async function renderNodes() {
-  nodesTable.replaceChildren();
-  try {
-    const nodes = await Nodes();
-    nodesTable.append(el('tr', {}, ...['', 'address', 'version', 'seeds', 'replicas', 'state', 'seen', 'conns', 'moved'].map(h => el('th', {}, h))));
-    for (const n of nodes) {
-      const dot = el('span', {class: 'dot ' + n.state}, '●');
-      nodesTable.append(el('tr', {}, el('td', {}, dot), el('td', {}, n.addr), el('td', {}, n.version || '?'),
-                           el('td', {}, n.seeds || '—'), el('td', {}, n.replicas), el('td', {}, n.state),
-                           el('td', {}, ago(n.lastSeen)), el('td', {}, String(n.conns)), el('td', {}, kb(n.bytes))));
-    }
-    nodesNote.textContent = `${nodes.length} node(s) as ${status.address} sees them · refreshes every 5s`;
-  } catch (e) { nodesNote.textContent = fail(e); }
+// ── state ─────────────────────────────────────────────────────────────────
+let status = {connected: false};
+const log = [];
+function record(text, kind = '') {
+  log.unshift({at: new Date(), text, kind});
+  if (log.length > 200) log.pop();
+  if (view === views.log) view.render();
 }
 
-// ── history view ──────────────────────────────────────────────────────────
-const historyList = el('ul', {class: 'history'});
-const historyView = el('div', {}, el('h2', {}, 'History'), historyList);
+// run performs one action and puts its outcome on a status line and in the
+// log: the summary fn returns, or the error in red.
+async function run(line, fn) {
+  try {
+    const text = await fn();
+    line.textContent = text;
+    line.className = 'status';
+    record(text);
+  } catch (e) {
+    const text = String(e?.message ?? e);
+    line.textContent = text;
+    line.className = 'status err';
+    record(text, 'err');
+  }
+}
 
-// ── tabs ──────────────────────────────────────────────────────────────────
-let current = 'keys';
+// ── layout ────────────────────────────────────────────────────────────────
+const pill = el('span', {class: 'pill'});
+const tabs = el('nav', {class: 'tabs'});
+const panel = el('main', {class: 'panel'});
+const sidebar = el('aside', {class: 'sidebar'});
+document.querySelector('#app').append(
+  el('header', {class: 'topbar'}, mark(), el('h1', {}, 'tritium'), tabs, pill),
+  el('div', {class: 'body'}, sidebar, panel),
+);
+
+function setStatus(s) {
+  status = s || {connected: false};
+  const badges = status.connected ? [status.address, status.tls && 'TLS', status.encrypted && 'sealed'].filter(Boolean) : ['disconnected'];
+  pill.replaceChildren(el('i', {class: 'dot'}), ...badges.map(b => el('span', {}, b)));
+  pill.className = 'pill ' + (status.connected ? 'on' : 'off');
+  btnToggle.textContent = status.connected ? 'Disconnect' : 'Connect';
+  document.body.classList.toggle('connected', status.connected);
+}
+
+// ── connection (sidebar) ──────────────────────────────────────────────────
+const input = attrs => el('input', {autocomplete: 'off', spellcheck: false, ...attrs});
+const field = (label, control, hint) => el('label', {class: 'field'}, el('span', {class: 'label'}, label), control, hint ? el('span', {class: 'hint'}, hint) : '');
+const inEnv = input({placeholder: '~/.config/mubs/tritium.env'});
+const inAddr = input({placeholder: '127.0.0.1:8080'});
+const inPass = input({type: 'password', placeholder: '••••••••'});
+const inTLS = el('input', {type: 'checkbox'});
+const inCA = input({placeholder: 'empty: system roots'});
+const inKey = input({type: 'password', placeholder: '32 bytes, hex or base64'});
+const secure = el('details', {class: 'more'},
+  el('summary', {}, 'TLS & encryption'),
+  el('label', {class: 'check'}, inTLS, el('span', {}, 'Connect with TLS')),
+  field('CA bundle', inCA),
+  field('Encryption key', inKey, 'Values are sealed before they leave the app; a sealed client reads only values it sealed.'),
+);
+const btnToggle = el('button', {class: 'primary wide', type: 'submit'}, 'Connect');
+const connLine = el('p', {class: 'status'}, 'Password and key stay in memory; the rest is remembered.');
+
+sidebar.append(el('form', {class: 'connect', onsubmit: e => { e.preventDefault(); toggle(); }},
+  el('h2', {}, 'Connection'),
+  field('Env file', inEnv, "A node's own .env fills node, password and CA."),
+  field('Node', inAddr),
+  field('Password', inPass),
+  secure,
+  btnToggle,
+  connLine,
+));
+
+async function toggle() {
+  if (status.connected) {
+    setStatus(await Disconnect());
+    connLine.textContent = 'disconnected';
+    connLine.className = 'status';
+    record('disconnected');
+    if (view.render) view.render();
+    return;
+  }
+  btnToggle.disabled = true;
+  await run(connLine, async () => {
+    const s = await Connect({address: inAddr.value.trim(), password: inPass.value, tls: inTLS.checked,
+                             ca: inCA.value.trim(), key: inKey.value.trim(), envFile: inEnv.value.trim()});
+    setStatus(s);
+    if (view.render) view.render();
+    return `connected to ${s.address}`;
+  });
+  btnToggle.disabled = false;
+}
+
+// ── keys ──────────────────────────────────────────────────────────────────
+const inKeyName = input({placeholder: 'key', class: 'key'});
+const inTTL = input({type: 'number', min: 0, placeholder: 'TTL s', class: 'ttl', title: 'Seconds the value lives; empty uses the node default'});
+const editor = el('textarea', {placeholder: 'value', rows: 14, spellcheck: false});
+const keyLine = el('p', {class: 'status'}, 'Get fills the editor; Set writes it. Enter gets, Ctrl+Enter sets.');
+const key = () => inKeyName.value.trim();
+
+const get = () => key() && run(keyLine, async () => {
+  editor.value = await Get(key());
+  return `GET ${key()} · ${bytes(editor.value)}`;
+});
+const set = () => key() && run(keyLine, async () => {
+  const ttl = Number(inTTL.value) || 0;
+  await Set(key(), editor.value, ttl);
+  return `SET ${key()} · ${bytes(editor.value)}${ttl ? ` · expires in ${ttl}s` : ''}`;
+});
+const del = () => key() && run(keyLine, async () => {
+  const was = await Delete(key());
+  return was ? `DEL ${key()}` : `${key()}: nothing to delete`;
+});
+inKeyName.addEventListener('keydown', e => { if (e.key === 'Enter') get(); });
+editor.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) set(); });
+
+// ── views ─────────────────────────────────────────────────────────────────
 const views = {
-  keys: () => panel.replaceChildren(keysView),
-  nodes: () => { panel.replaceChildren(nodesView); renderNodes(); },
-  history: () => {
-    historyList.replaceChildren(...history.map(h => el('li', {class: h.kind},
-      el('time', {}, h.at.toLocaleTimeString()), el('span', {}, h.text))));
-    panel.replaceChildren(historyView);
+  keys: {
+    title: 'Keys',
+    root: el('section', {class: 'card'},
+      el('div', {class: 'bar'}, inKeyName, inTTL,
+        el('button', {class: 'primary', onclick: get}, 'Get'),
+        el('button', {onclick: set}, 'Set'),
+        el('button', {class: 'danger', onclick: del}, 'Delete')),
+      editor, keyLine),
+    mount() { inKeyName.focus(); },
+  },
+  nodes: {
+    title: 'Cluster',
+    timer: null,
+    table: el('table', {class: 'grid'}),
+    line: el('p', {class: 'status'}),
+    mount() { this.render(); this.timer = setInterval(() => this.render(), 5000); },
+    unmount() { clearInterval(this.timer); },
+    async render() {
+      const {table, line} = this;
+      if (!status.connected) {
+        table.replaceChildren();
+        line.textContent = 'Connect to a node to see the cluster as it sees it.';
+        line.className = 'status';
+        return;
+      }
+      try {
+        const nodes = await Nodes();
+        table.replaceChildren(
+          el('tr', {}, ...['', 'node', 'version', 'seeds', 'replicas', 'state', 'seen', 'conns', 'moved'].map(h => el('th', {}, h))),
+          ...nodes.map(n => el('tr', {},
+            el('td', {}, el('i', {class: 'dot ' + n.state})),
+            el('td', {class: 'addr'}, n.addr),
+            el('td', {class: 'dim'}, n.version || '?'),
+            el('td', {class: 'dim'}, ...(n.seeds ? n.seeds.split(', ').map(x => el('div', {}, x)) : ['—'])),
+            el('td', {class: n.replicas.includes('held') ? 'warn' : ''}, n.replicas),
+            el('td', {class: n.state}, n.state),
+            el('td', {class: 'dim'}, ago(n.lastSeen)),
+            el('td', {class: 'num'}, String(n.conns)),
+            el('td', {class: 'num'}, size(n.bytes)))));
+        line.textContent = `${nodes.length} node${nodes.length === 1 ? '' : 's'} as ${status.address} sees them · refreshed ${clock(new Date())}`;
+        line.className = 'status';
+      } catch (e) {
+        line.textContent = String(e?.message ?? e);
+        line.className = 'status err';
+      }
+    },
+  },
+  log: {
+    title: 'Log',
+    list: el('ul', {class: 'log'}),
+    mount() { this.render(); },
+    render() {
+      this.list.replaceChildren(...log.map(h => el('li', {class: h.kind}, el('time', {}, clock(h.at)), el('span', {}, h.text))));
+    },
   },
 };
-for (const name of Object.keys(views)) {
-  tabs.append(el('button', {class: 'tab' + (name === current ? ' active' : ''), onclick: e => {
-    current = name;
-    for (const t of tabs.children) t.classList.toggle('active', t === e.currentTarget);
-    clearInterval(nodesTimer); nodesTimer = null;
-    views[name]();
-    if (name === 'nodes') nodesTimer = setInterval(renderNodes, 5000);
-  }}, name[0].toUpperCase() + name.slice(1)));
+views.nodes.root = el('section', {class: 'card'},
+  el('div', {class: 'bar'}, el('h2', {}, 'Cluster'), el('span', {class: 'grow'}), el('button', {onclick: () => views.nodes.render()}, 'Refresh')),
+  el('div', {class: 'scroll'}, views.nodes.table), views.nodes.line);
+views.log.root = el('section', {class: 'card'},
+  el('div', {class: 'bar'}, el('h2', {}, 'Log'), el('span', {class: 'grow'}), el('button', {onclick: () => { log.length = 0; views.log.render(); }}, 'Clear')),
+  views.log.list);
+
+let view = null;
+function show(name) {
+  view?.unmount?.();
+  view = views[name];
+  for (const t of tabs.children) t.classList.toggle('active', t.dataset.view === name);
+  panel.replaceChildren(view.root);
+  view.mount?.();
 }
-views.keys();
+for (const [name, v] of Object.entries(views)) {
+  tabs.append(el('button', {class: 'tab', 'data-view': name, onclick: () => show(name)}, v.title));
+}
 
 // ── boot ──────────────────────────────────────────────────────────────────
+setStatus(status);
+show('keys');
 LoadSettings().then(s => {
+  inEnv.value = s.envFile || '';
   inAddr.value = s.address || '';
   inTLS.checked = !!s.tls;
   inCA.value = s.ca || '';
-  inEnv.value = s.envFile || '';
+  secure.open = !!(s.tls || s.ca);
 }).catch(() => {});
 Status().then(setStatus).catch(() => {});
-inAddr.focus();

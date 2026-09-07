@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,9 +38,7 @@ type Status struct {
 type Node struct {
 	ID       string `json:"id"`
 	Addr     string `json:"addr"`
-	Store    string `json:"store"`
 	State    string `json:"state"`
-	Seed     bool   `json:"seed"`
 	Version  string `json:"version"`
 	Seeds    string `json:"seeds"`    // what the node dials, comma-separated
 	Replicas string `json:"replicas"` // "1", or "1 (1 held)" when a peer stopped answering
@@ -232,10 +230,10 @@ func (a *App) Nodes() ([]Node, error) {
 		if n.Stats.Held > 0 {
 			replicas += fmt.Sprintf(" (%d held)", n.Stats.Held)
 		}
-		out = append(out, Node{ID: id, Addr: n.Addr, Store: n.StoreAddr, State: string(n.State), Seed: n.IsLeader,
+		out = append(out, Node{ID: id, Addr: n.Addr, State: string(n.State),
 			Version: n.Version, Seeds: strings.Join(n.Seeds, ", "), Replicas: replicas,
 			LastSeen: n.LastSeen.Format(time.RFC3339), Conns: n.Stats.ActiveConnections, Bytes: n.Stats.BytesTransferred})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Addr < out[j].Addr })
+	slices.SortFunc(out, func(a, b Node) int { return strings.Compare(a.Addr, b.Addr) })
 	return out, nil
 }

@@ -13,11 +13,13 @@ client-side encryption.
   they leave the app (`tritium.ParseKey`: hex or base64). A node's own `.env` file fills
   address, password and CA in one go. Password and key stay in memory; the rest is
   remembered in `~/.config/tritium-wails/settings.json`.
-- **Keys** — get, set with a TTL, delete. A missing or expired key says so where the
-  value would go; a sealed client refuses values it did not seal.
-- **Cluster** — every node the connected one knows, its store, state, last beat,
-  connections and bytes moved, refreshed every five seconds.
-- **History** — what you did this session.
+- **Keys** — one key, one editor: Get fills it, Set writes it (with a TTL), Delete
+  removes it. Enter gets, Ctrl+Enter sets. A missing or expired key says so on the
+  status line; a sealed client refuses values it did not seal.
+- **Cluster** — every node the connected one knows: version, the seeds it dials,
+  replicas (held ones flagged), state, last beat, connections and bytes moved,
+  refreshed every five seconds.
+- **Log** — what you did this session, errors in red.
 
 Nothing rendered comes through `innerHTML`: values come from a store anyone with the
 password can write to.
@@ -35,6 +37,8 @@ go build -tags desktop,production,webkit2_41 -ldflags "-s -w" -o build/bin/triti
 ./build/bin/tritium-wails
 ```
 
-`wails dev` works too when the Wails CLI is installed. The Go bindings in
+`npm run dev` in `frontend/` opens the UI in a browser against a stand-in Go side
+with sample data (`src/mock.js`), for layout work without a node; `wails dev`
+works too when the Wails CLI is installed. The Go bindings in
 `frontend/wailsjs/go` mirror `app.go`; regenerate them with `wails generate module`
 after changing the App's methods, or edit them by hand — they are one line each.
