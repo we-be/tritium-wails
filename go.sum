@@ -60,12 +60,8 @@ github.com/wailsapp/mimetype v1.4.1 h1:pQN9ycO7uo4vsUUuPeHEYoUkLVkaRntMnHJxVwYhw
 github.com/wailsapp/mimetype v1.4.1/go.mod h1:9aV5k31bBOv5z6u+QP8TltzvNGJPmNJD4XlAL3U+j3o=
 github.com/wailsapp/wails/v2 v2.15.0 h1:u7cHK+UesZOlYxyJxfYLteaCPhws6UsZoDdqUejuX6Q=
 github.com/wailsapp/wails/v2 v2.15.0/go.mod h1:scxrgwfsv6yR6fE6cCF+Flfl+JeU+SR87T9x4kILJ6M=
-github.com/we-be/tritium v0.3.2 h1:2dzuK234w+SwaJSYAKE91PME0RvFhxs7Xn1z8tQvKO8=
-github.com/we-be/tritium v0.3.2/go.mod h1:lq7j5FcjC/2t11oeqCGtmAR54m1bNPPd8TbhuHCpQEE=
-github.com/we-be/tritium v0.10.0 h1:QYAS0nzsOrPpqajT4ixQPcPPKKhh1ps4l4cKosMa6W0=
-github.com/we-be/tritium v0.10.0/go.mod h1:lq7j5FcjC/2t11oeqCGtmAR54m1bNPPd8TbhuHCpQEE=
-github.com/we-be/tritium v0.11.2-0.20260907124232-a04814c15d81 h1:r/OkxuAvpEJTAKWhw4Sbc6L86vkxx7t8MO/O58VFTBc=
-github.com/we-be/tritium v0.11.2-0.20260907124232-a04814c15d81/go.mod h1:lq7j5FcjC/2t11oeqCGtmAR54m1bNPPd8TbhuHCpQEE=
+github.com/we-be/tritium v0.12.0 h1:+plRUpbPH1uQboH8XQQXComQX1lcksUj4Mv3BdKNCmc=
+github.com/we-be/tritium v0.12.0/go.mod h1:lq7j5FcjC/2t11oeqCGtmAR54m1bNPPd8TbhuHCpQEE=
 golang.org/x/crypto v0.53.0 h1:QZ4Muo8THX6CizN2vPPd5fBGHyogrdK9fG4wLPFUsto=
 golang.org/x/crypto v0.53.0/go.mod h1:DNLU434OwVakk9PzuwV8w62mAJpRJL3vsgcfp4Qnsio=
 golang.org/x/net v0.0.0-20210505024714-0287a6fb4125/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
