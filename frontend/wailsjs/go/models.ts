@@ -19,6 +19,9 @@ export namespace main {
 	    store: string;
 	    state: string;
 	    seed: boolean;
+	    version: string;
+	    seeds: string;
+	    replicas: string;
 	    lastSeen: string;
 	    conns: number;
 	    bytes: number;

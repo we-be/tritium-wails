@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +41,9 @@ type Node struct {
 	Store    string `json:"store"`
 	State    string `json:"state"`
 	Seed     bool   `json:"seed"`
+	Version  string `json:"version"`
+	Seeds    string `json:"seeds"`    // what the node dials, comma-separated
+	Replicas string `json:"replicas"` // "1", or "1 (1 held)" when a peer stopped answering
 	LastSeen string `json:"lastSeen"`
 	Conns    int64  `json:"conns"`
 	Bytes    int64  `json:"bytes"`
@@ -223,7 +228,12 @@ func (a *App) Nodes() ([]Node, error) {
 	}
 	out := make([]Node, 0, len(view))
 	for id, n := range view {
+		replicas := strconv.Itoa(n.Stats.Replicas)
+		if n.Stats.Held > 0 {
+			replicas += fmt.Sprintf(" (%d held)", n.Stats.Held)
+		}
 		out = append(out, Node{ID: id, Addr: n.Addr, Store: n.StoreAddr, State: string(n.State), Seed: n.IsLeader,
+			Version: n.Version, Seeds: strings.Join(n.Seeds, ", "), Replicas: replicas,
 			LastSeen: n.LastSeen.Format(time.RFC3339), Conns: n.Stats.ActiveConnections, Bytes: n.Stats.BytesTransferred})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Addr < out[j].Addr })

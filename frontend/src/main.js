@@ -152,11 +152,12 @@ async function renderNodes() {
   nodesTable.replaceChildren();
   try {
     const nodes = await Nodes();
-    nodesTable.append(el('tr', {}, ...['', 'address', 'store', 'state', 'seen', 'conns', 'moved'].map(h => el('th', {}, h))));
+    nodesTable.append(el('tr', {}, ...['', 'address', 'version', 'seeds', 'replicas', 'state', 'seen', 'conns', 'moved'].map(h => el('th', {}, h))));
     for (const n of nodes) {
       const dot = el('span', {class: 'dot ' + n.state}, '●');
-      nodesTable.append(el('tr', {}, el('td', {}, dot), el('td', {}, n.addr + (n.seed ? ' (seed)' : '')), el('td', {}, n.store),
-                           el('td', {}, n.state), el('td', {}, ago(n.lastSeen)), el('td', {}, String(n.conns)), el('td', {}, kb(n.bytes))));
+      nodesTable.append(el('tr', {}, el('td', {}, dot), el('td', {}, n.addr), el('td', {}, n.version || '?'),
+                           el('td', {}, n.seeds || '—'), el('td', {}, n.replicas), el('td', {}, n.state),
+                           el('td', {}, ago(n.lastSeen)), el('td', {}, String(n.conns)), el('td', {}, kb(n.bytes))));
     }
     nodesNote.textContent = `${nodes.length} node(s) as ${status.address} sees them · refreshes every 5s`;
   } catch (e) { nodesNote.textContent = fail(e); }
