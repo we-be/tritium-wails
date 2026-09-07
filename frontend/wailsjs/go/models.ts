@@ -24,4 +24,13 @@ export namespace main {
 	    conns: number;
 	    bytes: number;
 	}
+	export class ScanKey {
+	    name: string;
+	    type: string;
+	    ttl: number;
+	}
+	export class ScanResult {
+	    keys: ScanKey[];
+	    next: number;
+	}
 }

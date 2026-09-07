@@ -1,12 +1,26 @@
 // A stand-in for the Go side when the UI runs in a plain browser (`npm run
 // dev`), so layout and states can be worked on without a node. main.js loads
 // it only when the Wails runtime is absent, so the app never ships it.
-const store = new Map([['node:bazzite', '{"role":"primary","load":0.42}'], ['sig:macair', '[]']]);
+const store = new Map([
+  ['node:bazzite', '{"role":"primary","load":0.42}'],
+  ['node:macair', '{"role":"replica","load":0.11}'],
+  ['sig:macair', '[]'],
+  ['sig:bazzite', '[]'],
+  ['session:alice', '{"since":"2026-09-01"}'],
+  ['session:bob', '{"since":"2026-09-03"}'],
+  ['cache:weather', '{"tempF":71}'],
+  ['cache:quote', '"the world is your oyster"'],
+  ['lock:deploy', '1'],
+  ['presence:hunter', 'online'],
+]);
+const ttls = new Map([['lock:deploy', 12], ['presence:hunter', -1]]); // seconds left, or -1 for no expiry
+const defaultTTL = 17600;
 let status = {connected: false};
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const notFound = k => new Error(`${k}: not found (missing or expired)`);
 const notConnected = () => new Error('not connected');
 const t = s => new Date(Date.now() - s * 1000).toISOString();
+const globRe = pattern => new RegExp('^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
 
 export default {
   async LoadSettings() { return {address: '127.0.0.1:8080', envFile: '~/.config/mubs/tritium.env', tls: true, ca: ''}; },
@@ -20,7 +34,17 @@ export default {
   async Disconnect() { status = {connected: false}; return status; },
   async Get(k) { if (!status.connected) throw notConnected(); await wait(60); if (!store.has(k)) throw notFound(k); return store.get(k); },
   async Set(k, v) { if (!status.connected) throw notConnected(); await wait(60); store.set(k, v); },
-  async Delete(k) { if (!status.connected) throw notConnected(); return store.delete(k); },
+  async Delete(k) { if (!status.connected) throw notConnected(); ttls.delete(k); return store.delete(k); },
+  async Scan(pattern, cursor, count) {
+    if (!status.connected) throw notConnected();
+    await wait(80);
+    const re = globRe(pattern || '*');
+    const names = [...store.keys()].filter(k => re.test(k)).sort();
+    const page = names.slice(cursor, cursor + (count || 10));
+    const next = cursor + page.length < names.length ? cursor + page.length : 0;
+    const keys = page.map(name => ({name, type: 'string', ttl: ttls.has(name) ? ttls.get(name) : defaultTTL}));
+    return {keys, next};
+  },
   async Nodes() {
     if (!status.connected) throw notConnected();
     return [

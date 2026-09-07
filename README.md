@@ -13,9 +13,11 @@ client-side encryption.
   they leave the app (`tritium.ParseKey`: hex or base64). A node's own `.env` file fills
   address, password and CA in one go. Password and key stay in memory; the rest is
   remembered in `~/.config/tritium-wails/settings.json`.
-- **Keys** — one key, one editor: Get fills it, Set writes it (with a TTL), Delete
-  removes it. Enter gets, Ctrl+Enter sets. A missing or expired key says so on the
-  status line; a sealed client refuses values it did not seal.
+- **Keys** — a pattern box pages through the keyspace with SCAN, listing each key's
+  type and TTL and a "More" control for the next page; click one to load it into
+  the editor. Get fills it, Set writes it (with a TTL), Delete removes it, and
+  either refreshes the list. Enter gets, Ctrl+Enter sets. A missing or expired key
+  says so on the status line; a sealed client refuses values it did not seal.
 - **Cluster** — every node the connected one knows: version, the seeds it dials,
   replicas (held ones flagged), state, last beat, connections and bytes moved,
   refreshed every five seconds.

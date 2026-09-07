@@ -26,6 +26,10 @@ export function Nodes() {
   return window['go']['main']['App']['Nodes']();
 }
 
+export function Scan(arg1, arg2, arg3) {
+  return window['go']['main']['App']['Scan'](arg1, arg2, arg3);
+}
+
 export function Set(arg1, arg2, arg3) {
   return window['go']['main']['App']['Set'](arg1, arg2, arg3);
 }

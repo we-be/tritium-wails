@@ -14,6 +14,8 @@ export function LoadSettings():Promise<main.Settings>;
 
 export function Nodes():Promise<Array<main.Node>>;
 
+export function Scan(arg1:string,arg2:number,arg3:number):Promise<main.ScanResult>;
+
 export function Set(arg1:string,arg2:string,arg3:number):Promise<void>;
 
 export function Status():Promise<main.Status>;

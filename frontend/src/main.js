@@ -3,7 +3,7 @@ import * as app from '../wailsjs/go/main/App';
 
 // The Go side, or, when the UI runs in a plain browser (`npm run dev`) for
 // layout work, a stand-in with sample data that the app build never loads.
-const {Connect, Delete, Disconnect, Get, LoadSettings, Nodes, Set, Status} = window.go ? app : (await import('./mock.js')).default;
+const {Connect, Delete, Disconnect, Get, LoadSettings, Nodes, Scan, Set, Status} = window.go ? app : (await import('./mock.js')).default;
 
 // Everything reaches the DOM through textContent, never innerHTML: values come
 // from a store anyone with the password can write to.
@@ -37,6 +37,7 @@ const ago = iso => {
   return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
 };
 const clock = d => d.toLocaleTimeString([], {hour12: false});
+const ttlText = n => n > 0 ? `${n}s` : n === -1 ? 'no ttl' : '—';
 
 // ── state ─────────────────────────────────────────────────────────────────
 let status = {connected: false};
@@ -144,26 +145,79 @@ const get = () => key() && run(keyLine, async () => {
 const set = () => key() && run(keyLine, async () => {
   const ttl = Number(inTTL.value) || 0;
   await Set(key(), editor.value, ttl);
+  scanReset();
   return `SET ${key()} · ${bytes(editor.value)}${ttl ? ` · expires in ${ttl}s` : ''}`;
 });
 const del = () => key() && run(keyLine, async () => {
   const was = await Delete(key());
+  scanReset();
   return was ? `DEL ${key()}` : `${key()}: nothing to delete`;
 });
 inKeyName.addEventListener('keydown', e => { if (e.key === 'Enter') get(); });
 editor.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) set(); });
 
+// ── key browser ──────────────────────────────────────────────────────────
+const inPattern = input({placeholder: '*', class: 'key'});
+const keyList = el('ul', {class: 'keylist'});
+const btnMore = el('button', {class: 'wide', hidden: true, onclick: () => scanMore()}, 'More');
+const scanLine = el('p', {class: 'status'});
+let scanCursor = 0;
+let scanRows = [];
+
+function loadKey(name) {
+  inKeyName.value = name;
+  get();
+}
+function renderKeyList() {
+  keyList.replaceChildren(...scanRows.map(k => el('li', {onclick: () => loadKey(k.name)},
+    el('span', {class: 'kname'}, k.name), el('span', {class: 'ktype'}, k.type), el('span', {class: 'kttl'}, ttlText(k.ttl)))));
+}
+async function scanMore() {
+  if (!status.connected) return;
+  try {
+    const {keys, next} = await Scan(inPattern.value.trim() || '*', scanCursor, 50);
+    scanCursor = next;
+    scanRows.push(...keys);
+    renderKeyList();
+    btnMore.hidden = next === 0;
+    scanLine.textContent = `${scanRows.length} key${scanRows.length === 1 ? '' : 's'}${next ? ' · more available' : ''}`;
+    scanLine.className = 'status';
+  } catch (e) {
+    scanLine.textContent = String(e?.message ?? e);
+    scanLine.className = 'status err';
+  }
+}
+async function scanReset() {
+  scanCursor = 0;
+  scanRows = [];
+  btnMore.hidden = true;
+  if (!status.connected) {
+    keyList.replaceChildren();
+    scanLine.textContent = 'Connect to a node to browse keys.';
+    scanLine.className = 'status';
+    return;
+  }
+  await scanMore();
+}
+inPattern.addEventListener('keydown', e => { if (e.key === 'Enter') scanReset(); });
+
 // ── views ─────────────────────────────────────────────────────────────────
 const views = {
   keys: {
     title: 'Keys',
-    root: el('section', {class: 'card'},
-      el('div', {class: 'bar'}, inKeyName, inTTL,
-        el('button', {class: 'primary', onclick: get}, 'Get'),
-        el('button', {onclick: set}, 'Set'),
-        el('button', {class: 'danger', onclick: del}, 'Delete')),
-      editor, keyLine),
-    mount() { inKeyName.focus(); },
+    root: el('section', {class: 'card keys'},
+      el('div', {class: 'browser'},
+        el('div', {class: 'bar'}, inPattern, el('button', {class: 'primary', onclick: () => scanReset()}, 'Scan')),
+        el('div', {class: 'scroll'}, keyList),
+        btnMore, scanLine),
+      el('div', {class: 'editor-col'},
+        el('div', {class: 'bar'}, inKeyName, inTTL,
+          el('button', {class: 'primary', onclick: get}, 'Get'),
+          el('button', {onclick: set}, 'Set'),
+          el('button', {class: 'danger', onclick: del}, 'Delete')),
+        editor, keyLine)),
+    mount() { inKeyName.focus(); scanReset(); },
+    render() { scanReset(); },
   },
   nodes: {
     title: 'Cluster',

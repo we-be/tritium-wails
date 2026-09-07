@@ -22,6 +22,25 @@ func TestAppAgainstNode(t *testing.T) {
 	if v, err := a.Get("wails:test"); err != nil || v != "hello" {
 		t.Fatalf("Get = %q, %v", v, err)
 	}
+	found := false
+	for cursor := uint64(0); ; {
+		page, err := a.Scan("wails:*", cursor, 50)
+		if err != nil {
+			t.Fatalf("Scan: %v", err)
+		}
+		for _, k := range page.Keys {
+			if k.Name == "wails:test" && k.Type == "string" && k.TTL > 0 {
+				found = true
+			}
+		}
+		if page.Next == 0 {
+			break
+		}
+		cursor = page.Next
+	}
+	if !found {
+		t.Fatal("Scan did not find wails:test")
+	}
 	if was, err := a.Delete("wails:test"); err != nil || !was {
 		t.Fatalf("Delete = %v, %v", was, err)
 	}

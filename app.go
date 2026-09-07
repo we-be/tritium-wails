@@ -214,6 +214,49 @@ func (a *App) Delete(key string) (bool, error) {
 	return c.Delete(key)
 }
 
+// ScanKey is one row of a Keys-view page.
+type ScanKey struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+	TTL  int64  `json:"ttl"`
+}
+
+// ScanResult is one SCAN page: what matched, and the cursor to keep paging
+// with. Next is 0 once the walk is done; otherwise it's opaque to the UI —
+// hold it and pass it straight back for the next page.
+type ScanResult struct {
+	Keys []ScanKey `json:"keys"`
+	Next uint64    `json:"next"`
+}
+
+// Scan lists keys matching pattern ("" or "*" for everything) one page at a
+// time, fetching each key's type and TTL in the same round trip so the Keys
+// view never issues a call per row.
+func (a *App) Scan(pattern string, cursor uint64, count int) (ScanResult, error) {
+	c, err := a.conn()
+	if err != nil {
+		return ScanResult{}, err
+	}
+	names, next, err := c.Scan(cursor, pattern, count)
+	if err != nil {
+		return ScanResult{}, err
+	}
+	keys := make([]ScanKey, 0, len(names))
+	for _, name := range names {
+		typ, err := c.Type(name)
+		if err != nil {
+			return ScanResult{}, err
+		}
+		ttl, err := c.Do("TTL", name)
+		if err != nil {
+			return ScanResult{}, err
+		}
+		n, _ := ttl.(int64)
+		keys = append(keys, ScanKey{Name: name, Type: typ, TTL: n})
+	}
+	return ScanResult{Keys: keys, Next: next}, nil
+}
+
 // Nodes is the cluster as the connected node sees it, sorted by address.
 func (a *App) Nodes() ([]Node, error) {
 	c, err := a.conn()
