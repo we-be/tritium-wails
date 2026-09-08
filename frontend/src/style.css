@@ -46,6 +46,7 @@ input::placeholder, textarea::placeholder { color: #55606f; }
 input:focus, textarea:focus { outline: none; border-color: var(--accent-deep); box-shadow: 0 0 0 3px var(--accent-soft); }
 input[type=checkbox] { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
 textarea { flex: 1; min-height: 120px; resize: none; font: 13px/1.5 var(--mono); }
+textarea[readonly] { color: var(--dim); }
 button { background: var(--line-soft); border: 1px solid var(--line); padding: 7px 14px; cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s; }
 button:hover { border-color: var(--dim); }
 button.primary { background: var(--accent-deep); border-color: var(--accent-deep); color: #fff; }

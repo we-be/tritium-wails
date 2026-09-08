@@ -138,9 +138,15 @@ const editor = el('textarea', {placeholder: 'value', rows: 14, spellcheck: false
 const keyLine = el('p', {class: 'status'}, 'Get fills the editor; Set writes it. Enter gets, Ctrl+Enter sets.');
 const key = () => inKeyName.value.trim();
 
+// A sorted set (a mubs board, the fleet index) comes back rendered one
+// "score<TAB>member" per line and read-only: Set would drop it for a string.
 const get = () => key() && run(keyLine, async () => {
-  editor.value = await Get(key());
-  return `GET ${key()} · ${bytes(editor.value)}`;
+  const v = await Get(key());
+  editor.value = v.text;
+  editor.readOnly = v.type === 'zset';
+  return v.type === 'zset'
+    ? `${key()} · sorted set · ${v.count} member${v.count === 1 ? '' : 's'} as score, member · read-only`
+    : `GET ${key()} · ${bytes(v.text)}`;
 });
 const set = () => key() && run(keyLine, async () => {
   const ttl = Number(inTTL.value) || 0;
@@ -154,6 +160,7 @@ const del = () => key() && run(keyLine, async () => {
   return was ? `DEL ${key()}` : `${key()}: nothing to delete`;
 });
 inKeyName.addEventListener('keydown', e => { if (e.key === 'Enter') get(); });
+inKeyName.addEventListener('input', () => { editor.readOnly = false; });
 editor.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) set(); });
 
 // ── key browser ──────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ const store = new Map([
   ['lock:deploy', '1'],
   ['presence:hunter', 'online'],
 ]);
+const zsets = new Map([['board:dev', [[1757260800, '{"who":"mubs","text":"rolled v0.14.1"}'], [1757261400, '{"who":"hunter","text":"nice"}']]]]);
 const ttls = new Map([['lock:deploy', 12], ['presence:hunter', -1]]); // seconds left, or -1 for no expiry
 const defaultTTL = 17600;
 let status = {connected: false};
@@ -32,17 +33,31 @@ export default {
     return status;
   },
   async Disconnect() { status = {connected: false}; return status; },
-  async Get(k) { if (!status.connected) throw notConnected(); await wait(60); if (!store.has(k)) throw notFound(k); return store.get(k); },
-  async Set(k, v) { if (!status.connected) throw notConnected(); await wait(60); store.set(k, v); },
-  async Delete(k) { if (!status.connected) throw notConnected(); ttls.delete(k); return store.delete(k); },
+  async Get(k) {
+    if (!status.connected) throw notConnected();
+    await wait(60);
+    if (zsets.has(k)) {
+      const m = zsets.get(k);
+      return {type: 'zset', text: m.map(([s, v]) => `${s}\t${v}`).join('\n') + '\n', count: m.length};
+    }
+    if (!store.has(k)) throw notFound(k);
+    return {type: 'string', text: store.get(k), count: 0};
+  },
+  async Set(k, v) {
+    if (!status.connected) throw notConnected();
+    await wait(60);
+    if (zsets.has(k)) throw new Error(`${k} holds a sorted set; delete it first to store a string there`);
+    store.set(k, v);
+  },
+  async Delete(k) { if (!status.connected) throw notConnected(); ttls.delete(k); return store.delete(k) || zsets.delete(k); },
   async Scan(pattern, cursor, count) {
     if (!status.connected) throw notConnected();
     await wait(80);
     const re = globRe(pattern || '*');
-    const names = [...store.keys()].filter(k => re.test(k)).sort();
+    const names = [...store.keys(), ...zsets.keys()].filter(k => re.test(k)).sort();
     const page = names.slice(cursor, cursor + (count || 10));
     const next = cursor + page.length < names.length ? cursor + page.length : 0;
-    const keys = page.map(name => ({name, type: 'string', ttl: ttls.has(name) ? ttls.get(name) : defaultTTL}));
+    const keys = page.map(name => ({name, type: zsets.has(name) ? 'zset' : 'string', ttl: ttls.has(name) ? ttls.get(name) : defaultTTL}));
     return {keys, next};
   },
   async Nodes() {

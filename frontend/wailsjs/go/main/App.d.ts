@@ -8,7 +8,7 @@ export function Delete(arg1:string):Promise<boolean>;
 
 export function Disconnect():Promise<main.Status>;
 
-export function Get(arg1:string):Promise<string>;
+export function Get(arg1:string):Promise<main.Value>;
 
 export function LoadSettings():Promise<main.Settings>;
 

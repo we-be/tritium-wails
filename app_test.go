@@ -19,8 +19,20 @@ func TestAppAgainstNode(t *testing.T) {
 	if err := a.Set("wails:test", "hello", 30); err != nil {
 		t.Fatal(err)
 	}
-	if v, err := a.Get("wails:test"); err != nil || v != "hello" {
-		t.Fatalf("Get = %q, %v", v, err)
+	if v, err := a.Get("wails:test"); err != nil || v.Text != "hello" {
+		t.Fatalf("Get = %+v, %v", v, err)
+	}
+	if _, err := a.client.Do("ZADD", "wails:zset", "2", "b", "1", "a"); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := a.Get("wails:zset"); err != nil || v.Type != "zset" || v.Count != 2 || v.Text != "1\ta\n2\tb\n" {
+		t.Fatalf("Get of a sorted set = %+v, %v", v, err)
+	}
+	if err := a.Set("wails:zset", "x", 30); err == nil {
+		t.Fatal("Set over a sorted set was allowed")
+	}
+	if was, err := a.Delete("wails:zset"); err != nil || !was {
+		t.Fatalf("Delete of a sorted set = %v, %v", was, err)
 	}
 	found := false
 	for cursor := uint64(0); ; {

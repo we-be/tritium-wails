@@ -33,4 +33,9 @@ export namespace main {
 	    keys: ScanKey[];
 	    next: number;
 	}
+	export class Value {
+	    type: string;
+	    text: string;
+	    count: number;
+	}
 }

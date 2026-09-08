@@ -175,28 +175,73 @@ func (a *App) conn() (*tritium.Client, error) {
 	return a.client, nil
 }
 
-// Get returns the value under key; "not found" is an error like any other so
-// the UI shows it where the value would go.
-func (a *App) Get(key string) (string, error) {
+// Value is what Get hands the editor: the string under a key, or a sorted set
+// rendered one "score<TAB>member" per line, lowest score first.
+type Value struct {
+	Type  string `json:"type"` // string or zset
+	Text  string `json:"text"`
+	Count int    `json:"count"` // members, when a sorted set
+}
+
+// Get returns what a key holds; "not found" is an error like any other so the
+// UI shows it where the value would go. A sorted set (a mubs board, the fleet
+// index) is read whole with its scores, since GET alone refuses the type.
+func (a *App) Get(key string) (Value, error) {
 	c, err := a.conn()
 	if err != nil {
-		return "", err
+		return Value{}, err
+	}
+	typ, err := c.Type(key)
+	if err != nil {
+		return Value{}, err
+	}
+	switch typ {
+	case "none":
+		return Value{}, fmt.Errorf("%s: not found (missing or expired)", key)
+	case "zset":
+		v, err := c.Do("ZRANGEBYSCORE", key, "-inf", "+inf", "WITHSCORES")
+		if err != nil {
+			return Value{}, err
+		}
+		items, _ := v.([]any)
+		var sb strings.Builder
+		for i := 0; i+1 < len(items); i += 2 {
+			fmt.Fprintf(&sb, "%s\t%s\n", bulk(items[i+1]), bulk(items[i]))
+		}
+		return Value{Type: "zset", Text: sb.String(), Count: len(items) / 2}, nil
 	}
 	v, err := c.Get(key)
 	if errors.Is(err, tritium.ErrNotFound) {
-		return "", fmt.Errorf("%s: not found (missing or expired)", key)
+		return Value{}, fmt.Errorf("%s: not found (missing or expired)", key)
 	}
 	if err != nil {
-		return "", err
+		return Value{}, err
 	}
-	return string(v), nil
+	return Value{Type: "string", Text: string(v)}, nil
 }
 
-// Set stores value under key; ttl 0 uses the node's default.
+func bulk(v any) string {
+	switch x := v.(type) {
+	case []byte:
+		return string(x)
+	case string:
+		return x
+	}
+	return fmt.Sprint(v)
+}
+
+// Set stores value under key; ttl 0 uses the node's default. A sorted set
+// under that name is left alone: the editor shows one read-only, and a string
+// written over it would silently drop a board.
 func (a *App) Set(key, value string, ttl int) error {
 	c, err := a.conn()
 	if err != nil {
 		return err
+	}
+	if typ, err := c.Type(key); err != nil {
+		return err
+	} else if typ == "zset" {
+		return fmt.Errorf("%s holds a sorted set; delete it first to store a string there", key)
 	}
 	var t *int
 	if ttl > 0 {
