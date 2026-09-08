@@ -24,6 +24,10 @@ export namespace main {
 	    lastSeen: string;
 	    conns: number;
 	    bytes: number;
+	    weight: number;
+	    keys: number;
+	    memory: number;
+	    writes: number;
 	}
 	export class ScanKey {
 	    name: string;

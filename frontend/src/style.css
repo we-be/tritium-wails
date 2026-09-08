@@ -140,7 +140,7 @@ svg.graph { flex: 1; min-width: 0; height: 100%; }
 .gnode text.sub { fill: var(--dim); font-size: 10.5px; }
 .gnode.ghost text { fill: var(--dim); }
 .card.nodes .side { width: 320px; flex: none; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
-.detail { flex: none; height: 252px; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; font: 12.5px/1.5 var(--mono); color: var(--dim); overflow: hidden; }
+.detail { flex: none; height: 328px; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; font: 12.5px/1.5 var(--mono); color: var(--dim); overflow: hidden; }
 ul.events { list-style: none; margin: 0; padding: 8px 10px; flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); font: 12px/1.5 var(--mono); }
 ul.events li { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--line-soft); }
 ul.events li.caption, ul.events li.hint { border: none; color: var(--dim); }

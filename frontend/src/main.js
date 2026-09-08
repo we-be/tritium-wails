@@ -419,16 +419,21 @@ const views = {
           dash('seen'),
           ['conns', members.length ? String(members.reduce((t, x) => t + x.conns, 0)) : '—'],
           ['moved', members.length ? size(members.reduce((t, x) => t + x.bytes, 0)) : '—'],
+          ['weight', members.length ? members.map(x => x.weight).join(' / ') : '—'],
+          ['keys', members.length ? String(Math.max(...members.map(x => x.keys))) : '—'],
+          ['memory', members.length ? size(Math.max(...members.map(x => x.memory))) : '—'],
+          ['writes', members.length ? String(members.reduce((t, x) => t + x.writes, 0)) : '—'],
         ];
       } else if (n.state === 'ghost') {
         head = n.addr;
-        rows = [['state', 'seeded, not a member', 'down'], dash('version'), dash('seeds'), dash('replicas'), dash('seen'), dash('conns'), dash('moved')];
+        rows = [['state', 'seeded, not a member', 'down'], dash('version'), dash('seeds'), dash('replicas'), dash('seen'), dash('conns'), dash('moved'), dash('weight'), dash('keys'), dash('memory'), dash('writes')];
       } else {
         head = n.addr;
         tags = [a === me() && 'you', this.pinned === a && 'pinned'].filter(Boolean);
         rows = [['state', n.state, n.state], ['version', n.version || '?'], ['seeds', seedsOf(n).join('\n') || '—'],
            ['replicas', n.replicas, n.replicas.includes('held') ? 'degraded' : ''], ['seen', ago(n.lastSeen)],
-           ['conns', String(n.conns)], ['moved', size(n.bytes)]];
+           ['conns', String(n.conns)], ['moved', size(n.bytes)],
+           ['weight', n.weight === 0 ? '0 (owns no key)' : String(n.weight)], ['keys', String(n.keys)], ['memory', size(n.memory)], ['writes', String(n.writes)]];
       }
       this.detail.replaceChildren(
         el('h3', {}, el('span', {class: 'name'}, head), ...tags.map(t => el('span', {class: 'tag'}, t))),

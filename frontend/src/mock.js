@@ -76,9 +76,9 @@ export default {
   async Nodes() {
     if (!status.connected) throw notConnected();
     return [
-      {id: 'node-bazzite.local:8080', addr: 'bazzite.local:8080', state: 'healthy', version: 'v0.11.1', seeds: 'macair.local:8080', replicas: '1', lastSeen: t(1), conns: 6, bytes: 48213},
-      {id: 'node-macair.local:8080', addr: 'macair.local:8080', state: 'degraded', version: 'v0.11.1', seeds: 'bazzite.local:8080', replicas: '1 (1 held)', lastSeen: t(12), conns: 3, bytes: 9120},
-      {id: 'node-pi.local:8080', addr: 'pi.local:8080', state: 'down', version: 'v0.11.0', seeds: 'bazzite.local:8080, macair.local:8080', replicas: '0', lastSeen: t(400), conns: 0, bytes: 0},
+      {id: 'node-bazzite.local:8080', addr: 'bazzite.local:8080', state: 'healthy', version: 'v0.11.1', seeds: 'macair.local:8080', replicas: '1', lastSeen: t(1), conns: 6, bytes: 48213, weight: 2, keys: 27, memory: 198144, writes: 1286},
+      {id: 'node-macair.local:8080', addr: 'macair.local:8080', state: 'degraded', version: 'v0.11.1', seeds: 'bazzite.local:8080', replicas: '1 (1 held)', lastSeen: t(12), conns: 3, bytes: 9120, weight: 1, keys: 27, memory: 197632, writes: 471},
+      {id: 'node-pi.local:8080', addr: 'pi.local:8080', state: 'down', version: 'v0.11.0', seeds: 'bazzite.local:8080, macair.local:8080', replicas: '0', lastSeen: t(400), conns: 0, bytes: 0, weight: 0, keys: 0, memory: 0, writes: 0},
     ];
   },
 };

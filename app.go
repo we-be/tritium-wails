@@ -47,6 +47,10 @@ type Node struct {
 	LastSeen string `json:"lastSeen"`
 	Conns    int64  `json:"conns"`
 	Bytes    int64  `json:"bytes"`
+	Weight   int    `json:"weight"` // ELECTRONEGATIVITY: its share of key ownership; 0 never owns
+	Keys     int64  `json:"keys"`   // what its store holds
+	Memory   int64  `json:"memory"` // bytes its store uses
+	Writes   int64  `json:"writes"` // writes carried out as owner since it started
 }
 
 type App struct {
@@ -375,7 +379,8 @@ func (a *App) Nodes() ([]Node, error) {
 		}
 		out = append(out, Node{ID: id, Addr: n.Addr, State: string(n.State),
 			Version: n.Version, Seeds: strings.Join(n.Seeds, ", "), Replicas: replicas,
-			LastSeen: n.LastSeen.Format(time.RFC3339), Conns: n.Stats.ActiveConnections, Bytes: n.Stats.BytesTransferred})
+			LastSeen: n.LastSeen.Format(time.RFC3339), Conns: n.Stats.ActiveConnections, Bytes: n.Stats.BytesTransferred,
+			Weight: n.Weight(), Keys: n.Stats.Keys, Memory: n.Stats.Memory, Writes: n.Stats.Writes})
 	}
 	slices.SortFunc(out, func(a, b Node) int { return strings.Compare(a.Addr, b.Addr) })
 	return out, nil
