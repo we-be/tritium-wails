@@ -29,7 +29,7 @@ export default {
   async Connect(s) {
     await wait(300);
     if (s.password === 'wrong') throw new Error('AUTH failed: WRONGPASS invalid username-password pair');
-    status = {connected: true, address: s.address || 'bazzite.local:8080', tls: s.tls || !!s.envFile, encrypted: !!s.key};
+    status = {connected: true, address: s.address || '127.0.0.1:8080', node: 'bazzite.local:8080', tls: s.tls || !!s.envFile, encrypted: !!s.key};
     return status;
   },
   async Disconnect() { status = {connected: false}; return status; },

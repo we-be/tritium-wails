@@ -13,7 +13,7 @@ func TestAppAgainstNode(t *testing.T) {
 	}
 	a := NewApp()
 	st, err := a.Connect(Settings{EnvFile: env})
-	if err != nil || !st.Connected {
+	if err != nil || !st.Connected || st.Node == "" {
 		t.Fatalf("Connect: %+v, %v", st, err)
 	}
 	if err := a.Set("wails:test", "hello", 30); err != nil {

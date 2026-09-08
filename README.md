@@ -15,13 +15,26 @@ client-side encryption.
   remembered in `~/.config/tritium-wails/settings.json`.
 - **Keys** — a pattern box pages through the keyspace with SCAN, listing each key's
   type and TTL and a "More" control for the next page; click one to load it into
-  the editor. Get fills it, Set writes it (with a TTL), Delete removes it, and
-  either refreshes the list. Enter gets, Ctrl+Enter sets. A missing or expired key
-  says so on the status line; a sealed client refuses values it did not seal.
-- **Cluster** — every node the connected one knows: version, the seeds it dials,
-  replicas (held ones flagged), state, last beat, connections and bytes moved,
-  refreshed every five seconds.
+  the editor. Get fills it, Set writes it (with a TTL), Delete removes it after a
+  second click to confirm, and either refreshes the list. Enter gets, Ctrl+Enter
+  sets. The `{ }` toggle shows a JSON value indented; an unedited value goes back
+  byte for byte, an edited one is written compact. A sorted set loads read-only,
+  one `score<TAB>member` per line, and Set will not write a string over it. A
+  missing or expired key says so on the status line; a sealed client refuses
+  values it did not seal.
+- **Cluster** — the fleet as the connected node sees it, drawn as a ring: an edge
+  for each seed a node dials (heavier when mutual, dashed to a node that is down,
+  hollow for a seed that is not a member), the node you are on marked with a dot.
+  Hover a node for its state, version, seeds, replicas (held ones flagged), last
+  beat, connections and bytes moved; click to pin it, click empty space to let go.
+  The card keeps one shape so rows compare across nodes, and sums the fleet up
+  when nothing is selected. Under it, the fleet's event log for the last hour —
+  attach, detach, hold, repair, stall, evict, resync, start — narrowed to the
+  selected node. Refreshed every five seconds.
 - **Log** — what you did this session, errors in red.
+
+With an env file remembered the app connects on launch. Disconnected, the Keys and
+Cluster panes sit blurred under a note; the log stays readable.
 
 Nothing rendered comes through `innerHTML`: values come from a store anyone with the
 password can write to.

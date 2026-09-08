@@ -92,9 +92,12 @@ document.querySelector('#app').append(
   el('div', {class: 'body'}, sidebar, panel),
 );
 
+// me is the node the app is on as the fleet names it: what it announces to
+// peers, or failing that what was dialed.
+const me = () => status.node || status.address;
 function setStatus(s) {
   status = s || {connected: false};
-  const badges = status.connected ? [status.address, status.tls && 'TLS', status.encrypted && 'sealed'].filter(Boolean) : ['disconnected'];
+  const badges = status.connected ? [me(), status.tls && 'TLS', status.encrypted && 'sealed'].filter(Boolean) : ['disconnected'];
   pill.replaceChildren(el('i', {class: 'dot'}), ...badges.map(b => el('span', {}, b)));
   pill.className = 'pill ' + (status.connected ? 'on' : 'off');
   btnToggle.textContent = status.connected ? 'Disconnect' : 'Connect';
@@ -202,13 +205,33 @@ const set = () => key() && run(keyLine, async () => {
   scanReset();
   return `SET ${key()} · ${bytes(out)}${ttl ? ` · expires in ${ttl}s` : ''}${!same && pretty && asJSON(out) ? ' · written compact' : ''}`;
 });
-const del = () => key() && run(keyLine, async () => {
-  const was = await Delete(key());
-  scanReset();
-  return was ? `DEL ${key()}` : `${key()}: nothing to delete`;
-});
+// Delete arms on the first click and fires on a second within a few seconds:
+// one stray click must not drop a board on the live plane.
+const btnDelete = el('button', {class: 'danger', onclick: () => del()}, 'Delete');
+let armed = null;
+function disarm() {
+  clearTimeout(armed);
+  armed = null;
+  btnDelete.textContent = 'Delete';
+  btnDelete.classList.remove('armed');
+}
+const del = () => {
+  if (!key()) return;
+  if (!armed) {
+    btnDelete.textContent = `Delete ${key()}?`;
+    btnDelete.classList.add('armed');
+    armed = setTimeout(disarm, 4000);
+    return;
+  }
+  disarm();
+  run(keyLine, async () => {
+    const was = await Delete(key());
+    scanReset();
+    return was ? `DEL ${key()}` : `${key()}: nothing to delete`;
+  });
+};
 inKeyName.addEventListener('keydown', e => { if (e.key === 'Enter') get(); });
-inKeyName.addEventListener('input', () => { editor.readOnly = false; });
+inKeyName.addEventListener('input', () => { editor.readOnly = false; disarm(); });
 editor.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) set(); });
 
 // ── key browser ──────────────────────────────────────────────────────────
@@ -269,7 +292,7 @@ const views = {
         el('div', {class: 'bar'}, inKeyName, inTTL,
           el('button', {class: 'primary', onclick: get}, 'Get'),
           el('button', {onclick: set}, 'Set'),
-          el('button', {class: 'danger', onclick: del}, 'Delete'), btnPretty),
+          btnDelete, btnPretty),
         editor, keyLine)),
     mount() { if (status.connected) inKeyName.focus(); scanReset(); },
     render() { scanReset(); },
@@ -302,7 +325,7 @@ const views = {
         const [nodes, log] = await Promise.all([Nodes(), Events(3600)]);
         this.log = log;
         this.draw(nodes);
-        line.textContent = `${nodes.length} node${nodes.length === 1 ? '' : 's'} as ${status.address} sees them · refreshed ${clock(new Date())} · hover a node, click to pin`;
+        line.textContent = `${nodes.length} node${nodes.length === 1 ? '' : 's'} as ${hostOf(me())} sees them · refreshed ${clock(new Date())} · hover a node, click to pin`;
         line.className = 'status';
       } catch (e) {
         line.textContent = String(e?.message ?? e);
@@ -334,21 +357,13 @@ const views = {
         x1: at[e.a].x, y1: at[e.a].y, x2: at[e.b].x, y2: at[e.b].y}));
       const nodeEls = addrs.map(a => {
         const n = byAddr.get(a), p = at[a];
-        const cls = ['gnode', n.state, a === status.address && 'me', a === this.pinned && 'pinned', a === this.hovered && 'hover'].filter(Boolean).join(' ');
-        const g = svg('g', {class: cls, transform: `translate(${p.x} ${p.y})`},
+        const cls = ['gnode', n.state, a === me() && 'me', a === this.pinned && 'pinned', a === this.hovered && 'hover'].filter(Boolean).join(' ');
+        return svg('g', {class: cls, transform: `translate(${p.x} ${p.y})`, 'data-addr': a},
           svg('circle', {class: 'ring', r: 34}),
           svg('circle', {class: 'body', r: 25}),
           svg('circle', {class: 'core', r: 5}),
           svg('text', {class: 'label', y: 46}, hostOf(a)),
           svg('text', {class: 'sub', y: 61}, n.state === 'ghost' ? 'not a member' : n.version || '?'));
-        g.addEventListener('mouseenter', () => { this.hovered = a; g.classList.add('hover'); this.showDetail(); });
-        g.addEventListener('mouseleave', () => { this.hovered = null; g.classList.remove('hover'); this.showDetail(); });
-        g.addEventListener('click', () => {
-          this.pinned = this.pinned === a ? null : a;
-          for (const x of this.graph.querySelectorAll('.gnode')) x.classList.toggle('pinned', x === g && !!this.pinned);
-          this.showDetail();
-        });
-        return g;
       });
       this.graph.replaceChildren(svg('g', {}, ...edgeEls), svg('g', {}, ...nodeEls));
       this.showDetail();
@@ -366,10 +381,17 @@ const views = {
             + (e.keys ? ` · ${e.keys} key${e.keys === 1 ? '' : 's'}` : '') + (e.took ? ` · ${took(e.took)}` : '')))),
         ...(rows.length ? [] : [el('li', {class: 'hint'}, status.connected ? 'Nothing in the last hour.' : '')]));
     },
-    // A click on empty graph space lets go of the pinned node.
-    unpin() {
-      this.pinned = null;
-      for (const x of this.graph.querySelectorAll('.gnode')) x.classList.remove('pinned');
+    // Hover and pin are tracked by address on the graph root rather than on
+    // the node elements, which the 5 s redraw replaces under the pointer.
+    hover(a) {
+      if (a === this.hovered) return;
+      this.hovered = a;
+      for (const x of this.graph.querySelectorAll('.gnode')) x.classList.toggle('hover', x.dataset.addr === a);
+      this.showDetail();
+    },
+    pin(a) {
+      this.pinned = a === this.pinned ? null : a;
+      for (const x of this.graph.querySelectorAll('.gnode')) x.classList.toggle('pinned', !!a && x.dataset.addr === this.pinned);
       this.showDetail();
     },
     // The detail card and the event list follow the hovered node and fall
@@ -403,7 +425,7 @@ const views = {
         rows = [['state', 'seeded, not a member', 'down'], dash('version'), dash('seeds'), dash('replicas'), dash('seen'), dash('conns'), dash('moved')];
       } else {
         head = n.addr;
-        tags = [a === status.address && 'you', this.pinned === a && 'pinned'].filter(Boolean);
+        tags = [a === me() && 'you', this.pinned === a && 'pinned'].filter(Boolean);
         rows = [['state', n.state, n.state], ['version', n.version || '?'], ['seeds', seedsOf(n).join('\n') || '—'],
            ['replicas', n.replicas, n.replicas.includes('held') ? 'degraded' : ''], ['seen', ago(n.lastSeen)],
            ['conns', String(n.conns)], ['moved', size(n.bytes)]];
@@ -423,7 +445,9 @@ const views = {
     },
   },
 };
-views.nodes.graph.addEventListener('click', e => { if (!e.target.closest('.gnode')) views.nodes.unpin(); });
+views.nodes.graph.addEventListener('mouseover', e => views.nodes.hover(e.target.closest('.gnode')?.dataset.addr ?? null));
+views.nodes.graph.addEventListener('mouseleave', () => views.nodes.hover(null));
+views.nodes.graph.addEventListener('click', e => views.nodes.pin(e.target.closest('.gnode')?.dataset.addr ?? null));
 views.nodes.root = el('section', {class: 'card nodes'},
   el('div', {class: 'bar'}, el('h2', {}, 'Cluster'), el('span', {class: 'grow'}), el('button', {onclick: () => views.nodes.render()}, 'Refresh')),
   el('div', {class: 'graph-wrap'}, views.nodes.graph, el('div', {class: 'side'}, views.nodes.detail, views.nodes.events)), views.nodes.line);

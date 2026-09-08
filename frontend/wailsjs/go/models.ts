@@ -10,6 +10,7 @@ export namespace main {
 	export class Status {
 	    connected: boolean;
 	    address: string;
+	    node: string;
 	    tls: boolean;
 	    encrypted: boolean;
 	}

@@ -31,6 +31,7 @@ type Settings struct {
 type Status struct {
 	Connected bool   `json:"connected"`
 	Address   string `json:"address"`
+	Node      string `json:"node"` // what the node announces to its peers; empty when INFO does not say
 	TLS       bool   `json:"tls"`
 	Encrypted bool   `json:"encrypted"`
 }
@@ -144,10 +145,26 @@ func (a *App) Connect(s Settings) (Status, error) {
 		a.client.Close()
 	}
 	a.client = c
-	a.status = Status{Connected: true, Address: opts.Address, TLS: opts.TLS != nil, Encrypted: opts.Key != nil}
+	a.status = Status{Connected: true, Address: opts.Address, Node: nodeAddr(c), TLS: opts.TLS != nil, Encrypted: opts.Key != nil}
 	a.mu.Unlock()
 	saveSettings(s)
 	return a.status, nil
+}
+
+// nodeAddr is the address the node announces to its peers, from INFO, so the
+// cluster view can mark the node the app is on even when it was dialed over
+// loopback. Empty for a user INFO tells less.
+func nodeAddr(c *tritium.Client) string {
+	v, err := c.Do("INFO")
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(bulk(v), "\n") {
+		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "node_addr:"); ok {
+			return rest
+		}
+	}
+	return ""
 }
 
 func (a *App) Disconnect() Status {

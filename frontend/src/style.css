@@ -55,6 +55,7 @@ button.toggle { font: 12px var(--mono); padding: 7px 10px; color: var(--dim); }
 button.toggle.on { color: var(--accent); border-color: var(--accent-deep); }
 button.danger { color: var(--danger); }
 button.danger:hover { background: var(--danger-soft); border-color: var(--danger); }
+button.danger.armed { background: var(--danger); border-color: var(--danger); color: #fff; }
 button.wide { width: 100%; margin-top: 6px; }
 button:disabled { opacity: .5; cursor: default; }
 .connected button.primary.wide { background: var(--line-soft); border-color: var(--line); color: var(--text); }
