@@ -64,5 +64,8 @@ func TestAppAgainstNode(t *testing.T) {
 		t.Fatalf("Nodes = %v, %v", nodes, err)
 	}
 	t.Logf("nodes: %d, first %s %s", len(nodes), nodes[0].Addr, nodes[0].State)
+	if _, err := a.Events(3600); err != nil {
+		t.Fatalf("Events: %v", err)
+	}
 	a.Disconnect()
 }

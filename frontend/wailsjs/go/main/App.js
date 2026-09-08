@@ -14,6 +14,10 @@ export function Disconnect() {
   return window['go']['main']['App']['Disconnect']();
 }
 
+export function Events(arg1) {
+    return window['go']['main']['App']['Events'](arg1);
+}
+
 export function Get(arg1) {
   return window['go']['main']['App']['Get'](arg1);
 }

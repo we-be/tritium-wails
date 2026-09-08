@@ -8,6 +8,8 @@ export function Delete(arg1:string):Promise<boolean>;
 
 export function Disconnect():Promise<main.Status>;
 
+export function Events(arg1:number):Promise<Array<main.Event>>;
+
 export function Get(arg1:string):Promise<main.Value>;
 
 export function LoadSettings():Promise<main.Settings>;

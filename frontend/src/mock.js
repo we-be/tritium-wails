@@ -60,6 +60,19 @@ export default {
     const keys = page.map(name => ({name, type: zsets.has(name) ? 'zset' : 'string', ttl: ttls.has(name) ? ttls.get(name) : defaultTTL}));
     return {keys, next};
   },
+  async Events(since) {
+    if (!status.connected) throw notConnected();
+    const now = Date.now(), ev = (s, node, event, peer, keys = 0, took = 0) => ({at: now - s * 1000, node, event, peer, keys, took});
+    return [
+      ev(5, 'node-bazzite.local:8080', 'attach', 'macair.local:8080'),
+      ev(5, 'node-bazzite.local:8080', 'resync', 'macair.local:8080', 27, 51),
+      ev(12, 'node-macair.local:8080', 'start', ''),
+      ev(40, 'node-macair.local:8080', 'detach', 'bazzite.local:8080'),
+      ev(400, 'node-bazzite.local:8080', 'hold', 'pi.local:8080'),
+      ev(340, 'node-bazzite.local:8080', 'evict', 'pi.local:8080', 0, 60500),
+      ev(900, 'node-macair.local:8080', 'repair', 'bazzite.local:8080', 3),
+    ].filter(e => now - e.at <= since * 1000);
+  },
   async Nodes() {
     if (!status.connected) throw notConnected();
     return [

@@ -33,6 +33,14 @@ export namespace main {
 	    keys: ScanKey[];
 	    next: number;
 	}
+	export class Event {
+	    at: number;
+	    node: string;
+	    event: string;
+	    peer: string;
+	    keys: number;
+	    took: number;
+	}
 	export class Value {
 	    type: string;
 	    text: string;

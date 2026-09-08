@@ -3,7 +3,7 @@ import * as app from '../wailsjs/go/main/App';
 
 // The Go side, or, when the UI runs in a plain browser (`npm run dev`) for
 // layout work, a stand-in with sample data that the app build never loads.
-const {Connect, Delete, Disconnect, Get, LoadSettings, Nodes, Scan, Set, Status} = window.go ? app : (await import('./mock.js')).default;
+const {Connect, Delete, Disconnect, Events, Get, LoadSettings, Nodes, Scan, Set, Status} = window.go ? app : (await import('./mock.js')).default;
 
 // Everything reaches the DOM through textContent, never innerHTML: values come
 // from a store anyone with the password can write to.
@@ -52,6 +52,7 @@ const ring = n => {
 };
 const seedsOf = n => n.seeds ? n.seeds.split(',').map(s => s.trim()).filter(Boolean) : [];
 const hostOf = a => a.replace(/:\d+$/, '').replace(/\.local$/, '');
+const took = ms => ms < 1000 ? `${ms}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms / 60000)}m`;
 
 // ── state ─────────────────────────────────────────────────────────────────
 let status = {connected: false};
@@ -116,7 +117,7 @@ const secure = el('details', {class: 'more'},
   field('Encryption key', inKey, 'Values are sealed before they leave the app; a sealed client reads only values it sealed.'),
 );
 const btnToggle = el('button', {class: 'primary wide', type: 'submit'}, 'Connect');
-const connLine = el('p', {class: 'status'}, 'Password and key stay in memory; the rest is remembered.');
+const connLine = el('p', {class: 'status'}, 'Password and key stay in memory; the rest is remembered. With an env file, the app connects on launch.');
 
 sidebar.append(el('form', {class: 'connect', onsubmit: e => { e.preventDefault(); toggle(); }},
   el('h2', {}, 'Connection'),
@@ -278,10 +279,12 @@ const views = {
     timer: null,
     graph: svg('svg', {class: 'graph', viewBox: `0 0 ${GW} ${GH}`, preserveAspectRatio: 'xMidYMid meet'}),
     detail: el('div', {class: 'detail'}),
+    events: el('ul', {class: 'events'}),
     line: el('p', {class: 'status'}),
     pinned: null,
     hovered: null,
     byAddr: new Map(),
+    log: [],
     mount() { this.render(); this.timer = setInterval(() => this.render(), 5000); },
     unmount() { clearInterval(this.timer); },
     async render() {
@@ -289,13 +292,15 @@ const views = {
       if (!status.connected) {
         graph.replaceChildren();
         this.byAddr.clear();
+        this.log = [];
         this.showDetail();
         line.textContent = 'Connect to a node to see the cluster as it sees it.';
         line.className = 'status';
         return;
       }
       try {
-        const nodes = await Nodes();
+        const [nodes, log] = await Promise.all([Nodes(), Events(3600)]);
+        this.log = log;
         this.draw(nodes);
         line.textContent = `${nodes.length} node${nodes.length === 1 ? '' : 's'} as ${status.address} sees them · refreshed ${clock(new Date())}`;
         line.className = 'status';
@@ -348,16 +353,31 @@ const views = {
       this.graph.replaceChildren(svg('g', {}, ...edgeEls), svg('g', {}, ...nodeEls));
       this.showDetail();
     },
+    showEvents(n) {
+      const mine = e => !n || e.node === n.id || e.peer === n.addr;
+      const rows = this.log.filter(mine).slice(0, 80);
+      const idHost = id => hostOf(id.replace(/^node-/, ''));
+      this.events.replaceChildren(
+        el('li', {class: 'caption'}, n ? `events · ${hostOf(n.addr)} · last hour` : 'events · last hour'),
+        ...rows.map(e => el('li', {},
+          el('time', {}, clock(new Date(e.at))),
+          el('span', {class: 'kind ' + e.event}, e.event),
+          el('span', {class: 'who'}, idHost(e.node) + (e.peer ? ` → ${hostOf(e.peer)}` : '')
+            + (e.keys ? ` · ${e.keys} key${e.keys === 1 ? '' : 's'}` : '') + (e.took ? ` · ${took(e.took)}` : '')))),
+        ...(rows.length ? [] : [el('li', {class: 'hint'}, status.connected ? 'Nothing in the last hour.' : '')]));
+    },
     // A click on empty graph space lets go of the pinned node.
     unpin() {
       this.pinned = null;
       for (const x of this.graph.querySelectorAll('.gnode')) x.classList.remove('pinned');
       this.showDetail();
     },
-    // The detail card follows the hovered node and falls back to the pinned one.
+    // The detail card and the event list follow the hovered node and fall
+    // back to the pinned one; with neither, the list is the whole fleet's hour.
     showDetail() {
       const a = this.hovered ?? this.pinned;
       const n = a && this.byAddr.get(a);
+      this.showEvents(n);
       if (!n) {
         this.detail.replaceChildren(el('p', {class: 'hint'}, status.connected ? 'Hover a node for its details; click to keep them.' : ''));
         return;
@@ -385,7 +405,7 @@ const views = {
 views.nodes.graph.addEventListener('click', e => { if (!e.target.closest('.gnode')) views.nodes.unpin(); });
 views.nodes.root = el('section', {class: 'card nodes'},
   el('div', {class: 'bar'}, el('h2', {}, 'Cluster'), el('span', {class: 'grow'}), el('button', {onclick: () => views.nodes.render()}, 'Refresh')),
-  el('div', {class: 'graph-wrap'}, views.nodes.graph, views.nodes.detail), views.nodes.line);
+  el('div', {class: 'graph-wrap'}, views.nodes.graph, el('div', {class: 'side'}, views.nodes.detail, views.nodes.events)), views.nodes.line);
 views.log.root = el('section', {class: 'card'},
   el('div', {class: 'bar'}, el('h2', {}, 'Log'), el('span', {class: 'grow'}), el('button', {onclick: () => { log.length = 0; views.log.render(); }}, 'Clear')),
   views.log.list);
@@ -406,11 +426,12 @@ for (const [name, v] of Object.entries(views)) {
 // ── boot ──────────────────────────────────────────────────────────────────
 setStatus(status);
 show('keys');
-LoadSettings().then(s => {
+// A remembered env file is the intent to connect, so the app does it on launch.
+Status().then(setStatus).catch(() => {}).then(() => LoadSettings()).then(s => {
   inEnv.value = s.envFile || '';
   inAddr.value = s.address || '';
   inTLS.checked = !!s.tls;
   inCA.value = s.ca || '';
   secure.open = !!(s.tls || s.ca);
+  if (s.envFile && !status.connected) toggle();
 }).catch(() => {});
-Status().then(setStatus).catch(() => {});

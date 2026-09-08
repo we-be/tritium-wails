@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -303,6 +304,43 @@ func (a *App) Scan(pattern string, cursor uint64, count int) (ScanResult, error)
 }
 
 // Nodes is the cluster as the connected node sees it, sorted by address.
+// Event is one line of a node's fleet log: attach, detach, hold, repair,
+// stall, evict, resync or start, with the peer involved when there is one.
+type Event struct {
+	At    int64  `json:"at"` // unix milliseconds
+	Node  string `json:"node"`
+	Event string `json:"event"`
+	Peer  string `json:"peer"`
+	Keys  int    `json:"keys"`
+	Took  int64  `json:"took"` // milliseconds
+}
+
+// Events is every node's fleet log over the last sinceSeconds, newest first.
+func (a *App) Events(sinceSeconds int) ([]Event, error) {
+	c, err := a.conn()
+	if err != nil {
+		return nil, err
+	}
+	view, err := c.Nodes()
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(view))
+	for id := range view {
+		ids = append(ids, id)
+	}
+	evs, err := c.Events(ids, time.Duration(sinceSeconds)*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Event, 0, len(evs))
+	for _, e := range evs {
+		out = append(out, Event{At: e.At, Node: e.Node, Event: e.Event, Peer: e.Peer, Keys: e.Keys, Took: e.Took})
+	}
+	slices.SortFunc(out, func(x, y Event) int { return cmp.Compare(y.At, x.At) })
+	return out, nil
+}
+
 func (a *App) Nodes() ([]Node, error) {
 	c, err := a.conn()
 	if err != nil {
