@@ -139,7 +139,7 @@ svg.graph { flex: 1; min-width: 0; height: 100%; }
 .gnode text.sub { fill: var(--dim); font-size: 10.5px; }
 .gnode.ghost text { fill: var(--dim); }
 .card.nodes .side { width: 320px; flex: none; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
-.detail { flex: none; max-height: 48%; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; font: 12.5px/1.5 var(--mono); color: var(--dim); overflow: auto; }
+.detail { flex: none; height: 252px; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; font: 12.5px/1.5 var(--mono); color: var(--dim); overflow: hidden; }
 ul.events { list-style: none; margin: 0; padding: 8px 10px; flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); font: 12px/1.5 var(--mono); }
 ul.events li { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--line-soft); }
 ul.events li.caption, ul.events li.hint { border: none; color: var(--dim); }
@@ -151,11 +151,13 @@ ul.events .kind.detach, ul.events .kind.hold, ul.events .kind.stall { color: var
 ul.events .kind.evict { color: var(--danger); }
 ul.events .who { color: var(--text); min-width: 0; word-break: break-word; }
 .detail .hint { margin: 0; }
-.detail h3 { margin: 0 0 10px; font: 600 13px var(--mono); color: var(--bright); word-break: break-all; }
-.detail .tag { margin-left: 8px; font-size: 10px; font-weight: 500; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); vertical-align: middle; }
+.detail h3 { display: flex; align-items: center; gap: 8px; height: 22px; margin: 0 0 8px; font: 600 13px var(--mono); color: var(--bright); }
+.detail h3 .name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.detail .tag { flex: none; font-size: 10px; font-weight: 500; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); }
 .detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; margin: 0; }
 .detail dt { color: var(--dim); }
-.detail dd { margin: 0; color: var(--text); white-space: pre-wrap; word-break: break-all; }
+.detail dd { margin: 0; height: 19px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail dd.seeds { height: 38px; white-space: pre; overflow: auto; text-overflow: clip; }
 .detail dd.healthy { color: var(--accent); }
 .detail dd.degraded { color: var(--warn); }
 .detail dd.down { color: var(--danger); }

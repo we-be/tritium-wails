@@ -302,7 +302,7 @@ const views = {
         const [nodes, log] = await Promise.all([Nodes(), Events(3600)]);
         this.log = log;
         this.draw(nodes);
-        line.textContent = `${nodes.length} node${nodes.length === 1 ? '' : 's'} as ${status.address} sees them · refreshed ${clock(new Date())}`;
+        line.textContent = `${nodes.length} node${nodes.length === 1 ? '' : 's'} as ${status.address} sees them · refreshed ${clock(new Date())} · hover a node, click to pin`;
         line.className = 'status';
       } catch (e) {
         line.textContent = String(e?.message ?? e);
@@ -373,23 +373,44 @@ const views = {
       this.showDetail();
     },
     // The detail card and the event list follow the hovered node and fall
-    // back to the pinned one; with neither, the list is the whole fleet's hour.
+    // back to the pinned one. The card keeps one shape whatever it shows —
+    // the same seven rows, one line each, the fleet summed up when nothing
+    // is selected — so the eye can jump between nodes and compare a row.
     showDetail() {
       const a = this.hovered ?? this.pinned;
       const n = a && this.byAddr.get(a);
       this.showEvents(n);
+      const members = [...this.byAddr.values()].filter(x => x.state !== 'ghost');
+      let head = '', tags = [], rows;
+      const dash = k => [k, '—'];
       if (!n) {
-        this.detail.replaceChildren(el('p', {class: 'hint'}, status.connected ? 'Hover a node for its details; click to keep them.' : ''));
-        return;
-      }
-      const rows = n.state === 'ghost'
-        ? [['state', 'seeded, not a member', 'down']]
-        : [['state', n.state, n.state], ['version', n.version || '?'], ['seeds', seedsOf(n).join('\n') || '—'],
+        const by = st => members.filter(x => x.state === st).length;
+        const versions = members.map(x => x.version).filter((v, i, all) => v && all.indexOf(v) === i); // Set here is the Go binding
+        const held = members.some(x => x.replicas.includes('held'));
+        head = status.connected && members.length ? `fleet · ${members.length} node${members.length === 1 ? '' : 's'}` : '';
+        rows = [
+          ['state', members.length ? [`${by('healthy')} healthy`, by('degraded') && `${by('degraded')} degraded`, by('down') && `${by('down')} down`].filter(Boolean).join(', ') : '—',
+            by('down') ? 'down' : by('degraded') ? 'degraded' : members.length ? 'healthy' : ''],
+          ['version', versions.length === 1 ? versions[0] : versions.length ? 'mixed: ' + versions.join(', ') : '—'],
+          dash('seeds'),
+          ['replicas', members.length ? String(members.reduce((t, x) => t + (parseInt(x.replicas) || 0), 0)) + (held ? ' (some held)' : '') : '—', held ? 'degraded' : ''],
+          dash('seen'),
+          ['conns', members.length ? String(members.reduce((t, x) => t + x.conns, 0)) : '—'],
+          ['moved', members.length ? size(members.reduce((t, x) => t + x.bytes, 0)) : '—'],
+        ];
+      } else if (n.state === 'ghost') {
+        head = n.addr;
+        rows = [['state', 'seeded, not a member', 'down'], dash('version'), dash('seeds'), dash('replicas'), dash('seen'), dash('conns'), dash('moved')];
+      } else {
+        head = n.addr;
+        tags = [a === status.address && 'you', this.pinned === a && 'pinned'].filter(Boolean);
+        rows = [['state', n.state, n.state], ['version', n.version || '?'], ['seeds', seedsOf(n).join('\n') || '—'],
            ['replicas', n.replicas, n.replicas.includes('held') ? 'degraded' : ''], ['seen', ago(n.lastSeen)],
            ['conns', String(n.conns)], ['moved', size(n.bytes)]];
+      }
       this.detail.replaceChildren(
-        el('h3', {}, n.addr, a === status.address ? el('span', {class: 'tag'}, 'you') : '', this.pinned === a ? el('span', {class: 'tag'}, 'pinned') : ''),
-        el('dl', {}, ...rows.flatMap(([k, v, cls]) => [el('dt', {}, k), el('dd', {class: cls || ''}, v)])));
+        el('h3', {}, el('span', {class: 'name'}, head), ...tags.map(t => el('span', {class: 'tag'}, t))),
+        el('dl', {}, ...rows.flatMap(([k, v, cls]) => [el('dt', {}, k), el('dd', {class: [cls, k === 'seeds' && 'seeds'].filter(Boolean).join(' ')}, v)])));
     },
   },
   log: {
