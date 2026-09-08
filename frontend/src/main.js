@@ -68,6 +68,9 @@ async function run(line, fn) {
 const pill = el('span', {class: 'pill'});
 const tabs = el('nav', {class: 'tabs'});
 const panel = el('main', {class: 'panel'});
+// Disconnected, the pane is only a preview of what a node would show, so it
+// sits blurred under this note; the log is local and stays readable.
+const veil = el('div', {class: 'veil'}, el('p', {class: 'title'}, 'Not connected'), el('p', {}, 'Connect to a node on the left to browse it.'));
 const sidebar = el('aside', {class: 'sidebar'});
 document.querySelector('#app').append(
   el('header', {class: 'topbar'}, mark(), el('h1', {}, 'tritium'), tabs, pill),
@@ -126,6 +129,7 @@ async function toggle() {
                              ca: inCA.value.trim(), key: inKey.value.trim(), envFile: inEnv.value.trim()});
     setStatus(s);
     if (view.render) view.render();
+    if (view === views.keys) inKeyName.focus();
     return `connected to ${s.address}`;
   });
   btnToggle.disabled = false;
@@ -223,7 +227,7 @@ const views = {
           el('button', {onclick: set}, 'Set'),
           el('button', {class: 'danger', onclick: del}, 'Delete')),
         editor, keyLine)),
-    mount() { inKeyName.focus(); scanReset(); },
+    mount() { if (status.connected) inKeyName.focus(); scanReset(); },
     render() { scanReset(); },
   },
   nodes: {
@@ -265,6 +269,7 @@ const views = {
   },
   log: {
     title: 'Log',
+    local: true,
     list: el('ul', {class: 'log'}),
     mount() { this.render(); },
     render() {
@@ -284,7 +289,8 @@ function show(name) {
   view?.unmount?.();
   view = views[name];
   for (const t of tabs.children) t.classList.toggle('active', t.dataset.view === name);
-  panel.replaceChildren(view.root);
+  panel.replaceChildren(view.root, veil);
+  panel.classList.toggle('local', !!view.local);
   view.mount?.();
 }
 for (const [name, v] of Object.entries(views)) {

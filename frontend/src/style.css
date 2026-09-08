@@ -106,3 +106,12 @@ ul.log { list-style: none; margin: 0; padding: 0; overflow: auto; font: 13px var
 ul.log li { display: flex; gap: 14px; padding: 7px 4px; border-bottom: 1px solid var(--line-soft); }
 ul.log li.err { color: var(--danger); }
 ul.log time { color: var(--dim); flex: none; }
+
+/* ── disconnected ── */
+.panel { position: relative; }
+.panel > .card { transition: filter .25s, opacity .25s; }
+body:not(.connected) .panel:not(.local) > .card { filter: blur(6px); opacity: .4; pointer-events: none; user-select: none; }
+.veil { display: none; position: absolute; inset: 0; place-content: center; text-align: center; color: var(--dim); pointer-events: none; }
+body:not(.connected) .panel:not(.local) > .veil { display: grid; }
+.veil p { margin: 0; }
+.veil .title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
