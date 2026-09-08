@@ -117,3 +117,34 @@ body:not(.connected) .panel:not(.local) > .card { filter: blur(6px); opacity: .4
 body:not(.connected) .panel:not(.local) > .veil { display: grid; }
 .veil p { margin: 0; }
 .veil .title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+
+/* ── cluster graph ── */
+.card.nodes .graph-wrap { display: flex; gap: 16px; flex: 1; min-height: 0; }
+svg.graph { flex: 1; min-width: 0; height: 100%; }
+.gedge { stroke: var(--line); stroke-width: 2; }
+.gedge.mutual { stroke: #34404f; stroke-width: 3; }
+.gedge.dead { stroke: var(--danger); stroke-dasharray: 5 6; opacity: .55; }
+.gnode { cursor: pointer; }
+.gnode circle.ring { fill: none; stroke: var(--dim); stroke-width: 1.5; stroke-dasharray: 3 4; display: none; }
+.gnode.pinned circle.ring { display: block; }
+.gnode circle.body { fill: var(--panel); stroke: var(--dim); stroke-width: 2.5; transition: stroke-width .12s; }
+.gnode.healthy circle.body { stroke: var(--accent); }
+.gnode.degraded circle.body { stroke: var(--warn); }
+.gnode.down circle.body { stroke: var(--danger); }
+.gnode.ghost circle.body { stroke-dasharray: 4 4; }
+.gnode.hover circle.body, .gnode.pinned circle.body { stroke-width: 4.5; }
+.gnode circle.core { fill: var(--dim); display: none; }
+.gnode.me circle.core { display: block; fill: var(--accent); }
+.gnode text { fill: var(--text); font: 12.5px var(--mono); text-anchor: middle; }
+.gnode text.sub { fill: var(--dim); font-size: 10.5px; }
+.gnode.ghost text { fill: var(--dim); }
+.detail { width: 270px; flex: none; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; font: 12.5px/1.5 var(--mono); color: var(--dim); overflow: auto; }
+.detail .hint { margin: 0; }
+.detail h3 { margin: 0 0 10px; font: 600 13px var(--mono); color: var(--bright); word-break: break-all; }
+.detail .tag { margin-left: 8px; font-size: 10px; font-weight: 500; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); vertical-align: middle; }
+.detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; margin: 0; }
+.detail dt { color: var(--dim); }
+.detail dd { margin: 0; color: var(--text); white-space: pre-wrap; word-break: break-all; }
+.detail dd.healthy { color: var(--accent); }
+.detail dd.degraded { color: var(--warn); }
+.detail dd.down { color: var(--danger); }

@@ -39,6 +39,20 @@ const ago = iso => {
 const clock = d => d.toLocaleTimeString([], {hour12: false});
 const ttlText = n => n > 0 ? `${n}s` : n === -1 ? 'no ttl' : '—';
 
+// ── cluster graph geometry ──
+const GW = 520, GH = 460;
+// ring spreads n nodes evenly around the centre; one sits alone, two face each other.
+const ring = n => {
+  const cx = GW / 2, cy = GH / 2 - 12, r = n < 2 ? 0 : Math.min(GW / 2 - 80, GH / 2 - 78);
+  const start = n === 2 ? Math.PI : -Math.PI / 2;
+  return Array.from({length: n}, (_, i) => {
+    const t = start + 2 * Math.PI * i / n;
+    return {x: Math.round(cx + r * Math.cos(t)), y: Math.round(cy + r * Math.sin(t))};
+  });
+};
+const seedsOf = n => n.seeds ? n.seeds.split(',').map(s => s.trim()).filter(Boolean) : [];
+const hostOf = a => a.replace(/:\d+$/, '').replace(/\.local$/, '');
+
 // ── state ─────────────────────────────────────────────────────────────────
 let status = {connected: false};
 const log = [];
@@ -262,38 +276,94 @@ const views = {
   nodes: {
     title: 'Cluster',
     timer: null,
-    table: el('table', {class: 'grid'}),
+    graph: svg('svg', {class: 'graph', viewBox: `0 0 ${GW} ${GH}`, preserveAspectRatio: 'xMidYMid meet'}),
+    detail: el('div', {class: 'detail'}),
     line: el('p', {class: 'status'}),
+    pinned: null,
+    hovered: null,
+    byAddr: new Map(),
     mount() { this.render(); this.timer = setInterval(() => this.render(), 5000); },
     unmount() { clearInterval(this.timer); },
     async render() {
-      const {table, line} = this;
+      const {graph, line} = this;
       if (!status.connected) {
-        table.replaceChildren();
+        graph.replaceChildren();
+        this.byAddr.clear();
+        this.showDetail();
         line.textContent = 'Connect to a node to see the cluster as it sees it.';
         line.className = 'status';
         return;
       }
       try {
         const nodes = await Nodes();
-        table.replaceChildren(
-          el('tr', {}, ...['', 'node', 'version', 'seeds', 'replicas', 'state', 'seen', 'conns', 'moved'].map(h => el('th', {}, h))),
-          ...nodes.map(n => el('tr', {},
-            el('td', {}, el('i', {class: 'dot ' + n.state})),
-            el('td', {class: 'addr'}, n.addr),
-            el('td', {class: 'dim'}, n.version || '?'),
-            el('td', {class: 'dim'}, ...(n.seeds ? n.seeds.split(', ').map(x => el('div', {}, x)) : ['—'])),
-            el('td', {class: n.replicas.includes('held') ? 'warn' : ''}, n.replicas),
-            el('td', {class: n.state}, n.state),
-            el('td', {class: 'dim'}, ago(n.lastSeen)),
-            el('td', {class: 'num'}, String(n.conns)),
-            el('td', {class: 'num'}, size(n.bytes)))));
+        this.draw(nodes);
         line.textContent = `${nodes.length} node${nodes.length === 1 ? '' : 's'} as ${status.address} sees them · refreshed ${clock(new Date())}`;
         line.className = 'status';
       } catch (e) {
         line.textContent = String(e?.message ?? e);
         line.className = 'status err';
       }
+    },
+    // draw lays the members on a ring with an edge for each seed a node
+    // dials. A seed nobody in the view answers to is drawn hollow, so a
+    // member that dropped out still shows where it was expected.
+    draw(nodes) {
+      const byAddr = new Map(nodes.map(n => [n.addr, n]));
+      for (const n of nodes) for (const s of seedsOf(n)) {
+        if (!byAddr.has(s)) byAddr.set(s, {addr: s, state: 'ghost', version: '', seeds: '', replicas: '—', lastSeen: '', conns: 0, bytes: 0});
+      }
+      this.byAddr = byAddr;
+      if (this.pinned && !byAddr.has(this.pinned)) this.pinned = null;
+      const addrs = [...byAddr.keys()].sort();
+      const at = Object.fromEntries(ring(addrs.length).map((p, i) => [addrs[i], p]));
+      const edges = new Map();
+      for (const n of nodes) for (const s of seedsOf(n)) {
+        const k = [n.addr, s].sort().join(' ');
+        const e = edges.get(k) || {a: n.addr, b: s, dirs: 0};
+        e.dirs++;
+        edges.set(k, e);
+      }
+      const gone = a => ['down', 'ghost'].includes(byAddr.get(a).state);
+      const edgeEls = [...edges.values()].map(e => svg('line', {
+        class: `gedge${e.dirs > 1 ? ' mutual' : ''}${gone(e.a) || gone(e.b) ? ' dead' : ''}`,
+        x1: at[e.a].x, y1: at[e.a].y, x2: at[e.b].x, y2: at[e.b].y}));
+      const nodeEls = addrs.map(a => {
+        const n = byAddr.get(a), p = at[a];
+        const cls = ['gnode', n.state, a === status.address && 'me', a === this.pinned && 'pinned', a === this.hovered && 'hover'].filter(Boolean).join(' ');
+        const g = svg('g', {class: cls, transform: `translate(${p.x} ${p.y})`},
+          svg('circle', {class: 'ring', r: 34}),
+          svg('circle', {class: 'body', r: 25}),
+          svg('circle', {class: 'core', r: 5}),
+          svg('text', {class: 'label', y: 46}, hostOf(a)),
+          svg('text', {class: 'sub', y: 61}, n.state === 'ghost' ? 'not a member' : n.version || '?'));
+        g.addEventListener('mouseenter', () => { this.hovered = a; g.classList.add('hover'); this.showDetail(); });
+        g.addEventListener('mouseleave', () => { this.hovered = null; g.classList.remove('hover'); this.showDetail(); });
+        g.addEventListener('click', () => {
+          this.pinned = this.pinned === a ? null : a;
+          for (const x of this.graph.querySelectorAll('.gnode')) x.classList.toggle('pinned', x === g && !!this.pinned);
+          this.showDetail();
+        });
+        return g;
+      });
+      this.graph.replaceChildren(svg('g', {}, ...edgeEls), svg('g', {}, ...nodeEls));
+      this.showDetail();
+    },
+    // The detail card follows the hovered node and falls back to the pinned one.
+    showDetail() {
+      const a = this.hovered ?? this.pinned;
+      const n = a && this.byAddr.get(a);
+      if (!n) {
+        this.detail.replaceChildren(el('p', {class: 'hint'}, status.connected ? 'Hover a node for its details; click to keep them.' : ''));
+        return;
+      }
+      const rows = n.state === 'ghost'
+        ? [['state', 'seeded, not a member', 'down']]
+        : [['state', n.state, n.state], ['version', n.version || '?'], ['seeds', seedsOf(n).join('\n') || '—'],
+           ['replicas', n.replicas, n.replicas.includes('held') ? 'degraded' : ''], ['seen', ago(n.lastSeen)],
+           ['conns', String(n.conns)], ['moved', size(n.bytes)]];
+      this.detail.replaceChildren(
+        el('h3', {}, n.addr, a === status.address ? el('span', {class: 'tag'}, 'you') : '', this.pinned === a ? el('span', {class: 'tag'}, 'pinned') : ''),
+        el('dl', {}, ...rows.flatMap(([k, v, cls]) => [el('dt', {}, k), el('dd', {class: cls || ''}, v)])));
     },
   },
   log: {
@@ -306,9 +376,9 @@ const views = {
     },
   },
 };
-views.nodes.root = el('section', {class: 'card'},
+views.nodes.root = el('section', {class: 'card nodes'},
   el('div', {class: 'bar'}, el('h2', {}, 'Cluster'), el('span', {class: 'grow'}), el('button', {onclick: () => views.nodes.render()}, 'Refresh')),
-  el('div', {class: 'scroll'}, views.nodes.table), views.nodes.line);
+  el('div', {class: 'graph-wrap'}, views.nodes.graph, views.nodes.detail), views.nodes.line);
 views.log.root = el('section', {class: 'card'},
   el('div', {class: 'bar'}, el('h2', {}, 'Log'), el('span', {class: 'grow'}), el('button', {onclick: () => { log.length = 0; views.log.render(); }}, 'Clear')),
   views.log.list);
