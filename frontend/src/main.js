@@ -139,24 +139,53 @@ async function toggle() {
 const inKeyName = input({placeholder: 'key', class: 'key'});
 const inTTL = input({type: 'number', min: 0, placeholder: 'TTL s', class: 'ttl', title: 'Seconds the value lives; empty uses the node default'});
 const editor = el('textarea', {placeholder: 'value', rows: 14, spellcheck: false});
-const keyLine = el('p', {class: 'status'}, 'Get fills the editor; Set writes it. Enter gets, Ctrl+Enter sets.');
+const keyLine = el('p', {class: 'status'}, 'Get fills the editor; Set writes it. Enter gets, Ctrl+Enter sets. { } indents JSON.');
 const key = () => inKeyName.value.trim();
+
+// ── JSON view ──
+// Most values are JSON, so the editor can show one indented. The pretty form
+// is a projection of the stored bytes: an unedited value goes back to the node
+// exactly as read, an edited one is written compact. Scalars and plain text
+// gain nothing from indentation and are left alone.
+let pretty = false;
+try { pretty = localStorage.getItem('pretty') === '1'; } catch {}
+let fetched = {key: '', text: ''}; // the last string read, exact
+const asJSON = text => {
+  try { const v = JSON.parse(text); return v && typeof v === 'object' ? v : undefined; } catch { return undefined; }
+};
+const projected = (text, on) => { const j = on && asJSON(text); return j ? JSON.stringify(j, null, 2) : text; };
+const reserialize = (text, on) => { const j = asJSON(text); return j ? JSON.stringify(j, null, on ? 2 : 0) : text; };
+const unedited = () => key() === fetched.key && editor.value === projected(fetched.text, pretty);
+const btnPretty = el('button', {class: 'toggle' + (pretty ? ' on' : ''), title: 'Show JSON values indented; Set writes an edited one back compact', onclick: () => setPretty(!pretty)}, '{ }');
+function setPretty(on) {
+  if (!editor.readOnly) editor.value = unedited() ? projected(fetched.text, on) : reserialize(editor.value, on);
+  pretty = on;
+  btnPretty.classList.toggle('on', on);
+  try { localStorage.setItem('pretty', on ? '1' : '0'); } catch {}
+}
 
 // A sorted set (a mubs board, the fleet index) comes back rendered one
 // "score<TAB>member" per line and read-only: Set would drop it for a string.
 const get = () => key() && run(keyLine, async () => {
   const v = await Get(key());
-  editor.value = v.text;
   editor.readOnly = v.type === 'zset';
-  return v.type === 'zset'
-    ? `${key()} · sorted set · ${v.count} member${v.count === 1 ? '' : 's'} as score, member · read-only`
-    : `GET ${key()} · ${bytes(v.text)}`;
+  if (v.type === 'zset') {
+    editor.value = v.text;
+    return `${key()} · sorted set · ${v.count} member${v.count === 1 ? '' : 's'} as score, member · read-only`;
+  }
+  fetched = {key: key(), text: v.text};
+  editor.value = projected(v.text, pretty);
+  return `GET ${key()} · ${bytes(v.text)}${asJSON(v.text) ? ' · JSON' : ''}`;
 });
 const set = () => key() && run(keyLine, async () => {
   const ttl = Number(inTTL.value) || 0;
-  await Set(key(), editor.value, ttl);
+  const same = unedited();
+  const out = same ? fetched.text : pretty ? reserialize(editor.value, false) : editor.value;
+  await Set(key(), out, ttl);
+  fetched = {key: key(), text: out};
+  editor.value = projected(out, pretty);
   scanReset();
-  return `SET ${key()} · ${bytes(editor.value)}${ttl ? ` · expires in ${ttl}s` : ''}`;
+  return `SET ${key()} · ${bytes(out)}${ttl ? ` · expires in ${ttl}s` : ''}${!same && pretty && asJSON(out) ? ' · written compact' : ''}`;
 });
 const del = () => key() && run(keyLine, async () => {
   const was = await Delete(key());
@@ -225,7 +254,7 @@ const views = {
         el('div', {class: 'bar'}, inKeyName, inTTL,
           el('button', {class: 'primary', onclick: get}, 'Get'),
           el('button', {onclick: set}, 'Set'),
-          el('button', {class: 'danger', onclick: del}, 'Delete')),
+          el('button', {class: 'danger', onclick: del}, 'Delete'), btnPretty),
         editor, keyLine)),
     mount() { if (status.connected) inKeyName.focus(); scanReset(); },
     render() { scanReset(); },
