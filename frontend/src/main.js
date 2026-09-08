@@ -348,6 +348,12 @@ const views = {
       this.graph.replaceChildren(svg('g', {}, ...edgeEls), svg('g', {}, ...nodeEls));
       this.showDetail();
     },
+    // A click on empty graph space lets go of the pinned node.
+    unpin() {
+      this.pinned = null;
+      for (const x of this.graph.querySelectorAll('.gnode')) x.classList.remove('pinned');
+      this.showDetail();
+    },
     // The detail card follows the hovered node and falls back to the pinned one.
     showDetail() {
       const a = this.hovered ?? this.pinned;
@@ -376,6 +382,7 @@ const views = {
     },
   },
 };
+views.nodes.graph.addEventListener('click', e => { if (!e.target.closest('.gnode')) views.nodes.unpin(); });
 views.nodes.root = el('section', {class: 'card nodes'},
   el('div', {class: 'bar'}, el('h2', {}, 'Cluster'), el('span', {class: 'grow'}), el('button', {onclick: () => views.nodes.render()}, 'Refresh')),
   el('div', {class: 'graph-wrap'}, views.nodes.graph, views.nodes.detail), views.nodes.line);
