@@ -3,6 +3,8 @@ package main
 import (
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,6 +59,7 @@ type App struct {
 	ctx    context.Context
 	mu     sync.Mutex
 	client *tritium.Client
+	opts   tritium.ClientOptions // what Connect dialed with, so Where can dial a peer the same way
 	status Status
 }
 
@@ -149,6 +152,7 @@ func (a *App) Connect(s Settings) (Status, error) {
 		a.client.Close()
 	}
 	a.client = c
+	a.opts = opts
 	a.status = Status{Connected: true, Address: opts.Address, Node: nodeAddr(c), TLS: opts.TLS != nil, Encrypted: opts.Key != nil}
 	a.mu.Unlock()
 	saveSettings(s)
@@ -281,6 +285,105 @@ func (a *App) Delete(key string) (bool, error) {
 	return c.Delete(key)
 }
 
+// Copy is what one node has under a key. Every write replicates, so the row
+// that disagrees — another digest, a shorter value, a node that will not say —
+// is the one worth looking at.
+type Copy struct {
+	Node   string `json:"node"`
+	Type   string `json:"type"`
+	TTL    int64  `json:"ttl"`
+	Bytes  int64  `json:"bytes"`  // a string: how many bytes lie there, a sealed value as it lies
+	Digest string `json:"digest"` // the first 8 hex of a sha256 over those same bytes
+	Count  int    `json:"count"`  // a sorted set: how many members
+	Error  string `json:"error"`  // this node alone would not answer
+}
+
+// Where asks every healthy node what it holds under key, dialing each on its
+// own address with the settings this connection uses. A node that refuses the
+// password answers in its own row rather than sinking the whole call.
+func (a *App) Where(key string) ([]Copy, error) {
+	c, err := a.conn()
+	if err != nil {
+		return nil, err
+	}
+	view, err := c.Nodes()
+	if err != nil {
+		return nil, err
+	}
+	a.mu.Lock()
+	opts, mine := a.opts, a.status.Node
+	a.mu.Unlock()
+	addrs := make([]string, 0, len(view))
+	for _, n := range view {
+		if n.State == "healthy" {
+			addrs = append(addrs, n.Addr)
+		}
+	}
+	slices.Sort(addrs)
+	out := make([]Copy, len(addrs))
+	var wg sync.WaitGroup
+	for i, addr := range addrs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if addr == mine || addr == opts.Address { // the node we are on answers on the open connection
+				out[i] = holds(c, addr, key)
+				return
+			}
+			peer := opts
+			peer.Address = addr
+			pc, err := tritium.NewClient(&peer)
+			if err != nil {
+				out[i] = Copy{Node: addr, Error: err.Error()}
+				return
+			}
+			defer pc.Close()
+			out[i] = holds(pc, addr, key)
+		}()
+	}
+	wg.Wait()
+	return out, nil
+}
+
+// holds reads key on one node. A string is measured and digested as stored,
+// never opened: a sealed value has to be comparable across nodes by a client
+// that may not hold its key.
+func holds(c *tritium.Client, addr, key string) Copy {
+	out := Copy{Node: addr}
+	typ, err := c.Type(key)
+	if err != nil {
+		out.Error = err.Error()
+		return out
+	}
+	out.Type = typ
+	ttl, err := c.Do("TTL", key)
+	if err != nil {
+		out.Error = err.Error()
+		return out
+	}
+	out.TTL, _ = ttl.(int64)
+	switch typ {
+	case "string":
+		v, err := c.Do("GET", key)
+		if err != nil {
+			out.Error = err.Error()
+			return out
+		}
+		b, _ := v.([]byte)
+		sum := sha256.Sum256(b)
+		out.Bytes, out.Digest = int64(len(b)), hex.EncodeToString(sum[:4])
+	case "zset":
+		v, err := c.Do("ZCARD", key)
+		if err != nil {
+			out.Error = err.Error()
+			return out
+		}
+		n, _ := v.(int64)
+		out.Count = int(n)
+	}
+	return out
+}
+
 // ScanKey is one row of a Keys-view page.
 type ScanKey struct {
 	Name string `json:"name"`
@@ -383,5 +486,58 @@ func (a *App) Nodes() ([]Node, error) {
 			Weight: n.Weight(), Keys: n.Stats.Keys, Memory: n.Stats.Memory, Writes: n.Stats.Writes})
 	}
 	slices.SortFunc(out, func(a, b Node) int { return strings.Compare(a.Addr, b.Addr) })
+	return out, nil
+}
+
+// Client is one connection a node is holding.
+type Client struct {
+	ID   string `json:"id"`
+	Addr string `json:"addr"`
+	Name string `json:"name"` // what the connection called itself: a worker, a bridge, a peer
+	Age  int64  `json:"age"`  // seconds since it connected
+	Idle int64  `json:"idle"` // seconds since its last command
+	User string `json:"user"`
+	Cmd  string `json:"cmd"` // the last command it ran
+}
+
+// Clients lists who is on the connected node, in the order the node lists
+// them. CLIENT LIST answers with a line of key=value pairs per connection;
+// a node that has no such command says so and the view shows that.
+func (a *App) Clients() ([]Client, error) {
+	c, err := a.conn()
+	if err != nil {
+		return nil, err
+	}
+	v, err := c.Do("CLIENT", "LIST")
+	if err != nil {
+		return nil, err
+	}
+	out := []Client{}
+	for _, line := range strings.Split(bulk(v), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var cl Client
+		for _, f := range strings.Fields(line) {
+			k, val, _ := strings.Cut(f, "=")
+			switch k {
+			case "id":
+				cl.ID = val
+			case "addr":
+				cl.Addr = val
+			case "name":
+				cl.Name = val
+			case "age":
+				cl.Age, _ = strconv.ParseInt(val, 10, 64)
+			case "idle":
+				cl.Idle, _ = strconv.ParseInt(val, 10, 64)
+			case "user":
+				cl.User = val
+			case "cmd":
+				cl.Cmd = val
+			}
+		}
+		out = append(out, cl)
+	}
 	return out, nil
 }

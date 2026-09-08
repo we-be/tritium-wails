@@ -53,6 +53,22 @@ func TestAppAgainstNode(t *testing.T) {
 	if !found {
 		t.Fatal("Scan did not find wails:test")
 	}
+	clients, err := a.Clients()
+	if err != nil || len(clients) == 0 {
+		t.Fatalf("Clients = %v, %v", clients, err)
+	}
+	t.Logf("clients: %d, first %s %q idle %ds", len(clients), clients[0].Addr, clients[0].Cmd, clients[0].Idle)
+	copies, err := a.Where("wails:test")
+	held := 0
+	for _, c := range copies {
+		if c.Error == "" && c.Type == "string" {
+			held++
+		}
+		t.Logf("where %s: type=%s ttl=%d bytes=%d %s %s", c.Node, c.Type, c.TTL, c.Bytes, c.Digest, c.Error)
+	}
+	if err != nil || held == 0 {
+		t.Fatalf("Where held nowhere: %+v, %v", copies, err)
+	}
 	if was, err := a.Delete("wails:test"); err != nil || !was {
 		t.Fatalf("Delete = %v, %v", was, err)
 	}

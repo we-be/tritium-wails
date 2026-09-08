@@ -73,10 +73,35 @@ export default {
       ev(900, 'node-macair.local:8080', 'repair', 'bazzite.local:8080', 3),
     ].filter(e => now - e.at <= since * 1000);
   },
+  async Clients() {
+    if (!status.connected) throw notConnected();
+    return [
+      {id: '4', addr: '192.168.1.31:52104', name: 'node-macair.local:8080', age: 90233, idle: 1, user: 'peer', cmd: 'tritium.gossip'},
+      {id: '7', addr: '100.58.44.32:44120', name: 'node-valence.local:8080', age: 88010, idle: 2, user: 'peer', cmd: 'tritium.replicate'},
+      {id: '12', addr: '192.168.1.24:41874', name: 'mubs-worker', age: 48213, idle: 3, user: 'mubs', cmd: 'zadd'},
+      {id: '13', addr: '192.168.1.24:41880', name: 'mubs-bridge', age: 48200, idle: 12, user: 'mubs', cmd: 'zrangebyscore'},
+      {id: '21', addr: '127.0.0.1:52344', name: '', age: 612, idle: 0, user: 'default', cmd: 'client'},
+    ];
+  },
+  // One healthy node holds it, the other will not say: the fleet's two
+  // interesting answers, without a fleet.
+  async Where(k) {
+    if (!status.connected) throw notConnected();
+    await wait(120);
+    const z = zsets.get(k), v = store.get(k);
+    const found = z ? {type: 'zset', ttl: defaultTTL, bytes: 0, digest: '', count: z.length}
+      : v !== undefined ? {type: 'string', ttl: ttls.has(k) ? ttls.get(k) : defaultTTL, bytes: new TextEncoder().encode(v).length, digest: 'c41d8fa3', count: 0}
+      : {type: 'none', ttl: -2, bytes: 0, digest: '', count: 0};
+    return [
+      {node: 'bazzite.local:8080', ...found, error: ''},
+      {node: 'valence.local:8080', type: '', ttl: 0, bytes: 0, digest: '', count: 0, error: 'AUTH failed: WRONGPASS invalid username-password pair'},
+    ];
+  },
   async Nodes() {
     if (!status.connected) throw notConnected();
     return [
-      {id: 'node-bazzite.local:8080', addr: 'bazzite.local:8080', state: 'healthy', version: 'v0.11.1', seeds: 'macair.local:8080', replicas: '1', lastSeen: t(1), conns: 6, bytes: 48213, weight: 2, keys: 27, memory: 198144, writes: 1286},
+      {id: 'node-bazzite.local:8080', addr: 'bazzite.local:8080', state: 'healthy', version: 'v0.11.1', seeds: 'macair.local:8080, valence.local:8080', replicas: '2', lastSeen: t(1), conns: 6, bytes: 48213, weight: 2, keys: 27, memory: 198144, writes: 1286},
+      {id: 'node-valence.local:8080', addr: 'valence.local:8080', state: 'healthy', version: 'v0.11.1', seeds: 'bazzite.local:8080', replicas: '1', lastSeen: t(2), conns: 2, bytes: 12880, weight: 1, keys: 27, memory: 196608, writes: 94},
       {id: 'node-macair.local:8080', addr: 'macair.local:8080', state: 'degraded', version: 'v0.11.1', seeds: 'bazzite.local:8080', replicas: '1 (1 held)', lastSeen: t(12), conns: 3, bytes: 9120, weight: 1, keys: 27, memory: 197632, writes: 471},
       {id: 'node-pi.local:8080', addr: 'pi.local:8080', state: 'down', version: 'v0.11.0', seeds: 'bazzite.local:8080, macair.local:8080', replicas: '0', lastSeen: t(400), conns: 0, bytes: 0, weight: 0, keys: 0, memory: 0, writes: 0},
     ];

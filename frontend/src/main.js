@@ -3,7 +3,7 @@ import * as app from '../wailsjs/go/main/App';
 
 // The Go side, or, when the UI runs in a plain browser (`npm run dev`) for
 // layout work, a stand-in with sample data that the app build never loads.
-const {Connect, Delete, Disconnect, Events, Get, LoadSettings, Nodes, Scan, Set, Status} = window.go ? app : (await import('./mock.js')).default;
+const {Clients, Connect, Delete, Disconnect, Events, Get, LoadSettings, Nodes, Scan, Set, Status, Where} = window.go ? app : (await import('./mock.js')).default;
 
 // Everything reaches the DOM through textContent, never innerHTML: values come
 // from a store anyone with the password can write to.
@@ -38,6 +38,8 @@ const ago = iso => {
 };
 const clock = d => d.toLocaleTimeString([], {hour12: false});
 const ttlText = n => n > 0 ? `${n}s` : n === -1 ? 'no ttl' : '—';
+const th = (label, cls = '') => el('th', {class: cls}, label);
+const td = (text, cls = '') => el('td', {class: cls}, text);
 
 // ── cluster graph geometry ──
 const GW = 520, GH = 460;
@@ -52,6 +54,8 @@ const ring = n => {
 };
 const seedsOf = n => n.seeds ? n.seeds.split(',').map(s => s.trim()).filter(Boolean) : [];
 const hostOf = a => a.replace(/:\d+$/, '').replace(/\.local$/, '');
+// A node names itself by its id, on the wire and in its own event log.
+const idHost = id => hostOf(id.replace(/^node-/, ''));
 const took = ms => ms < 1000 ? `${ms}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms / 60000)}m`;
 
 // ── state ─────────────────────────────────────────────────────────────────
@@ -230,8 +234,30 @@ const del = () => {
     return was ? `DEL ${key()}` : `${key()}: nothing to delete`;
   });
 };
+// ── where ──
+// Every write replicates, so what matters is whether the nodes agree: each
+// healthy one is asked what it has under the key, and a node that refuses
+// the password says so in its own row.
+const whereBox = el('div', {class: 'where', hidden: true});
+const holds = c => c.error ? c.error
+  : c.type === 'zset' ? `${c.count} member${c.count === 1 ? '' : 's'}`
+  : c.type === 'string' ? `${size(c.bytes)} · ${c.digest}` : 'not here';
+const where = () => key() && run(keyLine, async () => {
+  const rows = await Where(key());
+  whereBox.replaceChildren(el('table', {class: 'grid'},
+    el('thead', {}, el('tr', {}, th('node'), th('type'), th('ttl', 'num'), th('holds'))),
+    el('tbody', {}, ...rows.map(c => el('tr', {},
+      td(c.node, 'addr'), td(c.error ? '—' : c.type, 'dim'),
+      td(c.error ? '—' : ttlText(c.ttl), 'num dim'), td(holds(c), c.error ? 'down' : ''))))));
+  whereBox.hidden = false;
+  const held = rows.filter(c => !c.error && c.type !== 'none').length;
+  const digests = rows.map(c => c.digest).filter(Boolean);
+  const agree = digests.length > 1 && digests.every(d => d === digests[0]);
+  return `WHERE ${key()} · on ${held} of ${rows.length} healthy node${rows.length === 1 ? '' : 's'}`
+    + (digests.length > 1 ? agree ? ' · copies agree' : ' · copies differ' : '');
+});
 inKeyName.addEventListener('keydown', e => { if (e.key === 'Enter') get(); });
-inKeyName.addEventListener('input', () => { editor.readOnly = false; disarm(); });
+inKeyName.addEventListener('input', () => { editor.readOnly = false; disarm(); whereBox.hidden = true; });
 editor.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) set(); });
 
 // ── key browser ──────────────────────────────────────────────────────────
@@ -292,8 +318,10 @@ const views = {
         el('div', {class: 'bar'}, inKeyName, inTTL,
           el('button', {class: 'primary', onclick: get}, 'Get'),
           el('button', {onclick: set}, 'Set'),
-          btnDelete, btnPretty),
-        editor, keyLine)),
+          btnDelete,
+          el('button', {onclick: where, title: 'What each healthy node holds under this key'}, 'Where'),
+          btnPretty),
+        editor, whereBox, keyLine)),
     mount() { if (status.connected) inKeyName.focus(); scanReset(); },
     render() { scanReset(); },
   },
@@ -303,11 +331,13 @@ const views = {
     graph: svg('svg', {class: 'graph', viewBox: `0 0 ${GW} ${GH}`, preserveAspectRatio: 'xMidYMid meet'}),
     detail: el('div', {class: 'detail'}),
     events: el('ul', {class: 'events'}),
+    connsBox: el('ul', {class: 'conns'}),
     line: el('p', {class: 'status'}),
     pinned: null,
     hovered: null,
     byAddr: new Map(),
     log: [],
+    conns: [], // rows, or the reason the node would not list them
     mount() { this.render(); this.timer = setInterval(() => this.render(), 5000); },
     unmount() { clearInterval(this.timer); },
     async render() {
@@ -316,15 +346,20 @@ const views = {
         graph.replaceChildren();
         this.byAddr.clear();
         this.log = [];
+        this.conns = [];
         this.showDetail();
+        this.showConns();
         line.textContent = 'Connect to a node to see the cluster as it sees it.';
         line.className = 'status';
         return;
       }
       try {
-        const [nodes, log] = await Promise.all([Nodes(), Events(3600)]);
+        // A node too old to list its connections must not cost us the graph.
+        const [nodes, log, conns] = await Promise.all([Nodes(), Events(3600), Clients().catch(e => String(e?.message ?? e))]);
         this.log = log;
+        this.conns = conns;
         this.draw(nodes);
+        this.showConns();
         line.textContent = `${nodes.length} node${nodes.length === 1 ? '' : 's'} as ${hostOf(me())} sees them · refreshed ${clock(new Date())} · hover a node, click to pin`;
         line.className = 'status';
       } catch (e) {
@@ -371,7 +406,6 @@ const views = {
     showEvents(n) {
       const mine = e => !n || e.node === n.id || e.peer === n.addr;
       const rows = this.log.filter(mine).slice(0, 80);
-      const idHost = id => hostOf(id.replace(/^node-/, ''));
       this.events.replaceChildren(
         el('li', {class: 'caption'}, n ? `events · ${hostOf(n.addr)} · last hour` : 'events · last hour'),
         ...rows.map(e => el('li', {},
@@ -380,6 +414,20 @@ const views = {
           el('span', {class: 'who'}, idHost(e.node) + (e.peer ? ` → ${hostOf(e.peer)}` : '')
             + (e.keys ? ` · ${e.keys} key${e.keys === 1 ? '' : 's'}` : '') + (e.took ? ` · ${took(e.took)}` : '')))),
         ...(rows.length ? [] : [el('li', {class: 'hint'}, status.connected ? 'Nothing in the last hour.' : '')]));
+    },
+    // Who is on the node the app is connected to, from its own CLIENT LIST:
+    // the workers, bridges and peers holding a socket, what each last ran and
+    // how long it has been quiet. A peer calls itself by its node id.
+    showConns() {
+      const rows = Array.isArray(this.conns) ? this.conns : [];
+      const err = Array.isArray(this.conns) ? '' : this.conns;
+      this.connsBox.replaceChildren(
+        el('li', {class: 'caption'}, status.connected && !err ? `connections · ${rows.length} on ${hostOf(me())}` : 'connections'),
+        ...rows.map(c => el('li', {title: `id ${c.id} · connected ${c.age}s ago`},
+          el('time', {}, `${c.idle}s`),
+          el('span', {class: 'who'}, c.name ? idHost(c.name) : '—'),
+          el('span', {class: 'what'}, el('i', {}, `${c.user || '—'} · `), c.cmd || '—', el('i', {}, ` · ${c.addr}`)))),
+        ...(err ? [el('li', {class: 'hint'}, err)] : []));
     },
     // Hover and pin are tracked by address on the graph root rather than on
     // the node elements, which the 5 s redraw replaces under the pointer.
@@ -455,7 +503,9 @@ views.nodes.graph.addEventListener('mouseleave', () => views.nodes.hover(null));
 views.nodes.graph.addEventListener('click', e => views.nodes.pin(e.target.closest('.gnode')?.dataset.addr ?? null));
 views.nodes.root = el('section', {class: 'card nodes'},
   el('div', {class: 'bar'}, el('h2', {}, 'Cluster'), el('span', {class: 'grow'}), el('button', {onclick: () => views.nodes.render()}, 'Refresh')),
-  el('div', {class: 'graph-wrap'}, views.nodes.graph, el('div', {class: 'side'}, views.nodes.detail, views.nodes.events)), views.nodes.line);
+  el('div', {class: 'graph-wrap'},
+    el('div', {class: 'ring-col'}, views.nodes.graph, views.nodes.connsBox),
+    el('div', {class: 'side'}, views.nodes.detail, views.nodes.events)), views.nodes.line);
 views.log.root = el('section', {class: 'card'},
   el('div', {class: 'bar'}, el('h2', {}, 'Log'), el('span', {class: 'grow'}), el('button', {onclick: () => { log.length = 0; views.log.render(); }}, 'Clear')),
   views.log.list);

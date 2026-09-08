@@ -21,7 +21,10 @@ client-side encryption.
   byte for byte, an edited one is written compact. A sorted set loads read-only,
   one `score<TAB>member` per line, and Set will not write a string over it. A
   missing or expired key says so on the status line; a sealed client refuses
-  values it did not seal.
+  values it did not seal. Where asks every healthy node what it has under the
+  key and puts the answers under the editor — type, TTL, and either a size with
+  a short digest of the bytes as they are stored or a member count — so a node
+  holding something else, or refusing the password, says so in its own row.
 - **Cluster** — the fleet as the connected node sees it, drawn as a ring: an edge
   for each seed a node dials (heavier when mutual, dashed to a node that is down,
   hollow for a seed that is not a member), the node you are on marked with a dot.
@@ -30,7 +33,10 @@ client-side encryption.
   The card keeps one shape so rows compare across nodes, and sums the fleet up
   when nothing is selected. Under it, the fleet's event log for the last hour —
   attach, detach, hold, repair, stall, evict, resync, start — narrowed to the
-  selected node. Refreshed every five seconds.
+  selected node. Under the ring, who is on the node you are connected to, as
+  its own CLIENT LIST tells it: the workers, bridges and peers holding a
+  socket, each with its user, last command, idle seconds and address.
+  Refreshed every five seconds.
 - **Log** — what you did this session, errors in red.
 
 With an env file remembered the app connects on launch. Disconnected, the Keys and

@@ -29,6 +29,24 @@ export namespace main {
 	    memory: number;
 	    writes: number;
 	}
+	export class Client {
+	    id: string;
+	    addr: string;
+	    name: string;
+	    age: number;
+	    idle: number;
+	    user: string;
+	    cmd: string;
+	}
+	export class Copy {
+	    node: string;
+	    type: string;
+	    ttl: number;
+	    bytes: number;
+	    digest: string;
+	    count: number;
+	    error: string;
+	}
 	export class ScanKey {
 	    name: string;
 	    type: string;

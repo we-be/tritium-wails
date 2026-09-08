@@ -77,7 +77,7 @@ button:disabled { opacity: .5; cursor: default; }
 
 /* ── keys ── */
 .bar input.key { flex: 1; font-family: var(--mono); }
-.bar input.ttl { width: 92px; font-family: var(--mono); }
+.bar input.ttl { width: 78px; font-family: var(--mono); }
 .card.keys { flex-direction: row; gap: 16px; }
 .browser { width: 260px; flex: none; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .editor-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
@@ -87,6 +87,8 @@ ul.keylist li:hover { background: var(--line-soft); }
 ul.keylist .kname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--bright); }
 ul.keylist .ktype { color: var(--dim); }
 ul.keylist .kttl { color: var(--dim); width: 52px; text-align: right; }
+.where { flex: none; max-height: 132px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); padding: 0 10px 4px; }
+.where td:last-child { white-space: normal; } /* a node's refusal is a sentence, not a column */
 
 /* ── cluster ── */
 table.grid { border-collapse: collapse; width: 100%; font: 12.5px var(--mono); }
@@ -94,7 +96,7 @@ table.grid th { position: sticky; top: 0; background: var(--card); text-align: l
 table.grid td { padding: 7px 7px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; vertical-align: top; }
 table.grid td.addr { color: var(--bright); }
 table.grid td.dim { color: var(--dim); }
-table.grid td.num, table.grid th:nth-last-child(-n+2) { text-align: right; }
+table.grid td.num, table.grid th.num { text-align: right; }
 table.grid td.warn { color: var(--warn); }
 table.grid td.healthy { color: var(--accent); }
 table.grid td.degraded { color: var(--warn); }
@@ -121,7 +123,18 @@ body:not(.connected) .panel:not(.local) > .veil { display: grid; }
 
 /* ── cluster graph ── */
 .card.nodes .graph-wrap { display: flex; gap: 16px; flex: 1; min-height: 0; }
-svg.graph { flex: 1; min-width: 0; height: 100%; }
+/* The ring letterboxes inside its column, so the connections list fills
+   slack the graph was never going to use. */
+.card.nodes .ring-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+svg.graph { flex: 1; width: 100%; min-height: 0; }
+ul.conns { list-style: none; margin: 0; padding: 8px 10px; flex: none; height: 168px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); font: 12px/1.5 var(--mono); }
+ul.conns li { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--line-soft); }
+ul.conns li.caption, ul.conns li.hint { border: none; color: var(--dim); }
+ul.conns li.caption { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; padding-bottom: 6px; }
+ul.conns time { flex: none; width: 32px; text-align: right; color: var(--dim); }
+ul.conns .who { flex: none; width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.conns .what { min-width: 0; word-break: break-word; }
+ul.conns .what i { font-style: normal; color: var(--dim); }
 .gedge { stroke: var(--line); stroke-width: 2; }
 .gedge.mutual { stroke: #34404f; stroke-width: 3; }
 .gedge.dead { stroke: var(--danger); stroke-dasharray: 5 6; opacity: .55; }
