@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/wailsapp/wails/v2 v2.15.0
-	github.com/we-be/tritium v0.17.6
+	github.com/we-be/tritium v0.18.2
 )
 
 require (
